@@ -215,6 +215,8 @@ def invoke(payload):
 
 Reference: https://github.com/awslabs/amazon-bedrock-agentcore-samples
 
+**Full deployment guide:** See [docs/deploy-to-agentcore.md](docs/deploy-to-agentcore.md) for step-by-step AgentCore deployment with Nevermined payments (header remapping, SigV4 signing, troubleshooting).
+
 ---
 
 ## Common Commands

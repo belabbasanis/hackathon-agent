@@ -137,12 +137,38 @@ Step-by-step A2A buyer flow: fetch agent card, parse payment, send A2A message, 
 
 ### 5. AWS AgentCore
 
+Deploy the buyer to AgentCore for production use with SigV4-signed requests and Bedrock LLM inference.
+
 ```bash
+# Install with AgentCore extras
 poetry install -E agentcore
-poetry run agent-agentcore
+
+# Local test (AgentCore-compatible mode)
+poetry run web-agentcore
+
+# Deploy to AgentCore
+agentcore init    # Interactive setup (entry point: src/web_agentcore.py)
+agentcore deploy  # Build, push, and deploy
 ```
 
-Uses Bedrock for the LLM. Deploy to AWS AgentCore for production.
+**Key differences from local mode:**
+- Uses `AgentCorePaymentsClient` with SigV4 signing for cross-agent requests
+- Sends payment tokens in both standard and AgentCore-prefixed headers (proxy strips standard ones)
+- Pre-registers the seller from `SELLER_AGENT_ARN` (agent card discovery doesn't work through AgentCore's proxy)
+- Rewrites `/invocations` → `/api/chat` (AgentCore routes all traffic to `/invocations`)
+
+**Required env vars (in addition to standard ones):**
+
+| Variable | Description |
+|----------|-------------|
+| `SELLER_AGENT_ARN` | The seller agent's AgentCore runtime ARN |
+| `AWS_REGION` | AWS region (default: `us-west-2`) |
+
+**Key files:**
+- `src/web_agentcore.py` — AgentCore entry point (seller pre-registration + path rewrite)
+- `src/agentcore_payments_client.py` — SigV4 signing + dual headers + URL handling
+
+See [Deploy to AgentCore](../../docs/deploy-to-agentcore.md) for the full walkthrough.
 
 ## Configuration
 

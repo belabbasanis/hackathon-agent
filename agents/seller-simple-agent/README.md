@@ -96,13 +96,34 @@ poetry run agent   # Starts FastAPI on http://localhost:3000
 
 ### AWS (AgentCore + Bedrock)
 
-Deploy the same agent core to AWS AgentCore. Uses Amazon Bedrock for LLM inference.
+Deploy the A2A server to AgentCore for production use with header remapping and Bedrock LLM inference.
 
 ```bash
-poetry run agent-agentcore
+# Install with AgentCore extras
+poetry install -E agentcore
+
+# Local test (AgentCore-compatible mode)
+poetry run agent-a2a-agentcore
+
+# Deploy to AgentCore
+agentcore init    # Interactive setup (entry point: src/agent_a2a_agentcore.py)
+agentcore deploy  # Build, push, and deploy
 ```
 
-Requires AWS credentials and Bedrock model access configured in `.env`.
+**Key differences from local mode:**
+- Adds `AgentCoreHeaderMiddleware` that remaps `X-Amzn-Bedrock-AgentCore-Runtime-Custom-Payment-Signature` → `payment-signature` (AgentCore strips standard custom headers)
+- Rewrites `/invocations` → `/` (AgentCore routes all traffic to `/invocations`)
+- Requires a **header allowlist** in `.bedrock_agentcore.yaml`:
+  ```yaml
+      request_header_configuration:
+        requestHeaderAllowlist:
+        - X-Amzn-Bedrock-AgentCore-Runtime-Custom-Payment-Signature
+  ```
+- Reads `PORT` and `AGENT_URL` from env vars set by AgentCore runtime
+
+**Key file:** `src/agent_a2a_agentcore.py` — header remapping middleware + A2A server setup
+
+See [Deploy to AgentCore](../../docs/deploy-to-agentcore.md) for the full walkthrough.
 
 ## Configuration
 

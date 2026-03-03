@@ -105,6 +105,8 @@ def premium_analysis(data: str, payment_token: str = None) -> str:
 
 AWS AgentCore provides managed infrastructure for deploying AI agents.
 
+> **Full deployment guide:** See [Deploy to AgentCore](./deploy-to-agentcore.md) for step-by-step instructions using the working buyer and seller agents, including the header remapping, SigV4 signing, and seller pre-registration patterns needed to make Nevermined payments work through AgentCore's proxy.
+
 ### Project Structure
 
 ```
@@ -278,6 +280,7 @@ logger.info(f"Credits used: {settlement.get('credits_burned')}")
 
 ## Resources
 
+- [Deploy to AgentCore](./deploy-to-agentcore.md) — Step-by-step deployment guide with Nevermined payments
 - [AWS AgentCore Documentation](https://docs.aws.amazon.com/bedrock/latest/userguide/agents.html)
 - [Strands SDK Documentation](https://github.com/awslabs/strands-agents)
 - [AgentCore Samples](https://github.com/awslabs/amazon-bedrock-agentcore-samples)

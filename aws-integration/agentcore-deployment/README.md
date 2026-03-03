@@ -2,9 +2,15 @@
 
 Deploy payment-enabled agents to AWS AgentCore.
 
+> **Looking for the full deployment guide?** See [docs/deploy-to-agentcore.md](../../docs/deploy-to-agentcore.md) for step-by-step instructions using the working buyer and seller agents, including header remapping, SigV4 signing, and troubleshooting.
+
 ## Overview
 
-AWS AgentCore provides managed infrastructure for deploying AI agents. This guide shows how to deploy Nevermined payment-enabled agents.
+AWS AgentCore provides managed infrastructure for deploying AI agents. This page shows the generic template pattern. For working examples with Nevermined payments, see:
+
+- `agents/seller-simple-agent/src/agent_a2a_agentcore.py` — seller with header remapping
+- `agents/buyer-simple-agent/src/web_agentcore.py` — buyer with SigV4 signing
+- `agents/buyer-simple-agent/src/agentcore_payments_client.py` — payment client with dual headers
 
 ## Prerequisites
 
