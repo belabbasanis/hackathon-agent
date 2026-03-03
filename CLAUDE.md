@@ -40,7 +40,7 @@ Add to `~/.config/claude/claude_desktop_config.json`:
 
 - **MCP Server**: https://docs.nevermined.app/mcp
 - **Context File**: https://docs.nevermined.app/assets/nevermined_mcp_for_llms.txt
-
+  https://nevermined.ai/docs/development-guide/build-using-nvm-mcp OR https://nevermined.ai/docs/llms-full.txt OR https://nevermined.ai/docs/llms.txt
 ---
 
 ## Hackathon Tracks
@@ -306,13 +306,17 @@ Each subfolder under `agents/` is an independent agent project with its own `pyp
   - Run agent (A2A): `poetry run python -m src.agent_a2a`
   - Run agent (A2A, search only): `poetry run python -m src.agent_a2a --tools search --port 9001 --buyer-url http://localhost:8000`
   - Run client: `poetry run python -m src.client`
+  - Run agent (AgentCore A2A): `poetry run python -m src.agent_a2a_agentcore`
+  - Docker build: `docker build -t seller-agent .`
 - `buyer-simple-agent/` - Data buying agent with A2A marketplace and web frontend
   - Install: `poetry install` (backend), `cd frontend && npm install` (frontend)
   - Run CLI agent (A2A default): `poetry run python -m src.agent`
   - Run CLI agent (HTTP mode): `poetry run python -m src.agent --mode http`
   - Run web server: `poetry run python -m src.web`
+  - Run web server (AgentCore): `poetry run python -m src.web_agentcore`
   - Run frontend dev: `cd frontend && npm run dev` (opens http://localhost:5173)
   - Run client (A2A): `poetry run python -m src.client_a2a`
+  - Docker build: `docker build -t buyer-agent .`
   - **Note:** Use `poetry run python -m src.<module>` (not `poetry run agent`) because `package-mode = false`
   - Demo scripts: `demo-scripts/demo-cli.md`, `demo-scripts/demo-frontend.md`
 - `mcp-server-agent/` - MCP server with Nevermined payment-protected tools (search, summarize, research)

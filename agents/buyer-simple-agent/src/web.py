@@ -55,7 +55,7 @@ model = OpenAIModel(
     client_args={"api_key": OPENAI_API_KEY},
     model_id=os.getenv("MODEL_ID", "gpt-4o-mini"),
 )
-agent = create_agent(model, mode="a2a")
+agent = create_agent(model, mode=os.getenv("BUYER_AGENT_MODE", "a2a"))
 
 # Serialize concurrent chat requests (Strands Agent is not thread-safe)
 agent_lock = asyncio.Lock()
@@ -114,9 +114,18 @@ enable_web_logging(log_queue)
 @app.post("/api/chat")
 async def chat(request: Request):
     """Stream a chat response from the agent via SSE."""
-    body = await request.json()
-    message = body.get("message", "").strip()
+    try:
+        body = await request.json()
+    except Exception as exc:
+        log(_logger, "WEB", "ERROR", f"Failed to parse JSON body: {exc}")
+        raw = (await request.body()).decode("utf-8", errors="replace")
+        log(_logger, "WEB", "ERROR", f"Raw body: {raw[:200]}")
+        return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
+
+    log(_logger, "WEB", "DEBUG", f"body keys={list(body.keys())}")
+    message = (body.get("message", "") or body.get("prompt", "")).strip()
     if not message:
+        log(_logger, "WEB", "ERROR", f"Empty message. Full body: {str(body)[:200]}")
         return JSONResponse({"error": "Empty message"}, status_code=400)
 
     log(_logger, "WEB", "RECEIVED", f'chat message: "{message[:80]}"')
@@ -169,6 +178,12 @@ async def get_balance():
         "balance": balance_result,
         "budget": budget_status,
     })
+
+
+@app.get("/ping")
+async def ping():
+    """Health check endpoint."""
+    return {"status": "ok"}
 
 
 @app.get("/api/logs/stream")

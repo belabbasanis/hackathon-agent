@@ -14,6 +14,7 @@ python-dotenv = "^1.0.0"
 fastapi = "^0.120.0"
 uvicorn = ">=0.34.2,<1.0.0"
 sse-starlette = ">=2.0.0"
+boto3 = ">=1.35.0"
 langchain-openai = ">=0.3.0"
 langgraph = ">=0.3.0"
 
@@ -27,6 +28,7 @@ client = "src.client:main"
 demo = "src.demo:main"
 client-a2a = "src.client_a2a:main"
 web = "src.web:main"
+web-agentcore = "src.web_agentcore:main"
 agent-langgraph = "src.agent_langgraph:main"
 
 [build-system]
