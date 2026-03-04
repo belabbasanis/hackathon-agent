@@ -22,7 +22,7 @@ AWS provides infrastructure for deploying and running AI agents at scale. Neverm
 ### Installation
 
 ```bash
-pip install strands-agents payments-py
+pip install strands-agents payments-py[strands]
 ```
 
 ### Basic Integration
@@ -72,7 +72,6 @@ def premium_analysis(data: str, payment_token: str = None) -> str:
     """Perform premium analysis (payment required)."""
 
     if not payment_token:
-        # Return payment requirements
         requirements = build_payment_required(
             plan_id=PLAN_ID,
             description="Premium data analysis"
@@ -99,6 +98,131 @@ def premium_analysis(data: str, payment_token: str = None) -> str:
     )
 
     return result
+```
+
+### Payment Middleware (Decorator Pattern)
+
+Wrap tools with automatic payment verification using a decorator:
+
+```python
+from functools import wraps
+
+def requires_payment(credits: int = 1):
+    """Decorator to require payment for a tool."""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            payment_token = kwargs.get("payment_token")
+            if not payment_token:
+                return {"error": "Payment token required"}
+
+            # Verify
+            verification = payments.facilitator.verify_permissions(
+                plan_id=PLAN_ID,
+                access_token=payment_token
+            )
+
+            if not verification.get("success"):
+                return {"error": "Payment verification failed"}
+
+            # Execute
+            result = func(*args, **kwargs)
+
+            # Settle
+            payments.facilitator.settle_permissions(
+                plan_id=PLAN_ID,
+                access_token=payment_token,
+                credits=credits
+            )
+
+            return result
+        return wrapper
+    return decorator
+
+
+@tool
+@requires_payment(credits=5)
+def expensive_analysis(data: str, payment_token: str) -> dict:
+    """Perform expensive analysis (5 credits)."""
+    return {"analysis": f"Analysis of {data}"}
+```
+
+> **Note:** The `payments-py` SDK includes a built-in `@requires_payment` decorator. Install with `pip install payments-py[strands]` and import from `payments_py.x402.strands`. See `agents/strands-simple-agent/` for a complete example.
+
+### Multi-Tier Pricing
+
+```python
+PRICING_TIERS = {
+    "basic": {"plan_id": "plan-basic", "credits": 1},
+    "standard": {"plan_id": "plan-standard", "credits": 5},
+    "premium": {"plan_id": "plan-premium", "credits": 10},
+}
+
+
+@tool
+def tiered_service(query: str, tier: str, payment_token: str) -> dict:
+    """Service with tiered pricing."""
+    tier_config = PRICING_TIERS.get(tier, PRICING_TIERS["basic"])
+
+    verification = payments.facilitator.verify_permissions(
+        plan_id=tier_config["plan_id"],
+        access_token=payment_token
+    )
+
+    if not verification.get("success"):
+        return {"error": f"Payment verification failed for {tier} tier"}
+
+    result = process_with_tier(query, tier)
+
+    payments.facilitator.settle_permissions(
+        plan_id=tier_config["plan_id"],
+        access_token=payment_token,
+        credits=tier_config["credits"]
+    )
+
+    return result
+```
+
+### Error Handling
+
+```python
+@tool
+def safe_paid_operation(query: str, payment_token: str) -> dict:
+    """Paid operation with proper error handling."""
+    try:
+        verification = payments.facilitator.verify_permissions(
+            plan_id=PLAN_ID,
+            access_token=payment_token
+        )
+
+        if not verification.get("success"):
+            return {
+                "success": False,
+                "error": "Payment verification failed",
+                "details": verification.get("error")
+            }
+
+        try:
+            result = do_work(query)
+        except Exception as e:
+            # Don't charge for failed execution
+            return {"success": False, "error": f"Execution failed: {e}", "charged": False}
+
+        # Settle only on success
+        settlement = payments.facilitator.settle_permissions(
+            plan_id=PLAN_ID,
+            access_token=payment_token,
+            credits=1
+        )
+
+        return {
+            "success": True,
+            "result": result,
+            "credits_charged": settlement.get("credits_burned", 1)
+        }
+
+    except Exception as e:
+        return {"success": False, "error": f"Payment system error: {e}"}
 ```
 
 ## AgentCore Deployment
@@ -221,15 +345,15 @@ The following patterns from [amazon-bedrock-agentcore-samples](https://github.co
 
 ### From `02-use-cases/`
 
-- `enterprise-web-intelligence-agent/` - Web data gathering with cost tracking
-- `cost-optimization-agent/` - Budget management patterns
-- `market-trends-agent/` - Data marketplace integration
+- `enterprise-web-intelligence-agent/` — Web data gathering with cost tracking
+- `cost-optimization-agent/` — Budget management patterns
+- `market-trends-agent/` — Data marketplace integration
 
 ## Best Practices
 
 ### 1. Environment Variables
 
-Never hardcode credentials. Use environment variables:
+Never hardcode credentials:
 
 ```python
 NVM_API_KEY = os.environ.get("NVM_API_KEY")

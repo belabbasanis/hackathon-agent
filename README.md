@@ -1,126 +1,117 @@
-# Autonomous Business Hackathon
+# Nevermined AI Agent Examples
 
-Starter kits and resources for the **Autonomous Business Hackathon** (March 5-6, San Francisco) hosted by AWS.
-
-Build AI agents that can buy, sell, and transact autonomously using Nevermined payment infrastructure.
+Working examples of AI agents with [Nevermined](https://nevermined.app) payment integration. Each agent demonstrates a different protocol (x402, A2A, MCP) and can be run locally with a few commands.
 
 ## Quick Start
 
-1. **Choose a starter kit** from the [Starter Kits](#starter-kits) section
-2. **Set up your environment** with Nevermined credentials
-3. **Run the example** and start building!
+### Prerequisites
 
-## Prerequisites
-
-- Node.js 18+ (for TypeScript kits)
-- Python 3.10+ (for Python kits)
-- [Nevermined App account](https://nevermined.app) for API keys and payment plans
+- Python 3.10+
+- [Poetry](https://python-poetry.org/) for dependency management
+- [Nevermined App](https://nevermined.app) account (API key + payment plan)
 - OpenAI API key (or other LLM provider)
 
-## Environment Setup
+### Environment Setup
+
+Each agent has its own `.env.example`. Copy and fill it in:
 
 ```bash
-# Copy the example environment file
+cd agents/<agent-name>
 cp .env.example .env
-
-# Edit with your credentials
-# NVM_API_KEY - Get from https://nevermined.app > API Keys > Global NVM API Keys
-# NVM_PLAN_ID - Create a plan in the Nevermined App
-# OPENAI_API_KEY - Your OpenAI API key
+# Edit .env with your credentials
 ```
 
-## Hackathon Tracks
+Key variables:
 
-| Track | Theme | Description | Starter Kits |
-|-------|-------|-------------|--------------|
-| **1** | Data Marketplace | Autonomous data buying/selling agents | A, B, C |
-| **2** | Internal A2A Economy | Agent-to-agent transactions within organizations | F, G, H, I |
-| **3** | Content Marketplace | Content publishing and consumption | D, E |
-| **4** | Open Track | Any creative use case | Any |
+```bash
+NVM_API_KEY=sandbox:your-api-key       # From https://nevermined.app > API Keys
+NVM_ENVIRONMENT=sandbox                # sandbox, staging_sandbox, or live
+NVM_PLAN_ID=your-plan-id              # Create in Nevermined App > My Pricing Plans
+OPENAI_API_KEY=sk-your-key            # For LLM-powered agents
+```
 
-## Starter Kits
+## Agents
 
-### Track 1: Data Marketplace (Priority)
+| Agent | Description | Protocols | Link |
+|-------|-------------|-----------|------|
+| **Buyer Agent** | Discovers sellers, purchases data, tracks spending | x402, A2A | [README](./agents/buyer-simple-agent/) |
+| **Seller Agent** | Sells data/services with tiered pricing | x402, A2A | [README](./agents/seller-simple-agent/) |
+| **MCP Server** | Payment-protected tools via MCP protocol | MCP, x402 | [README](./agents/mcp-server-agent/) |
+| **Strands Agent** | Strands SDK agent with payment-protected tools | x402 | [README](./agents/strands-simple-agent/) |
 
-| Kit | Name | Description | Languages |
-|-----|------|-------------|-----------|
-| **A** | [Buyer Agent](./starter-kits/kit-a-buyer-agent/) ([code](./agents/buyer-simple-agent/)) | Discovers and purchases data autonomously | TS, Python |
-| **B** | [Selling Agent](./starter-kits/kit-b-selling-agent/) ([code](./agents/seller-simple-agent/)) | Registers and sells data/services | TS, Python |
-| **C** | [Switching Agent](./starter-kits/kit-c-switching-agent/) | Switches between data providers based on price/quality | TS |
+### Buyer Agent (`agents/buyer-simple-agent/`)
 
-### Track 2: Internal A2A Economy
+Discovers sellers in an A2A marketplace, purchases data autonomously, and tracks spending with budget limits. Includes a React web frontend for interactive use.
 
-| Kit | Name | Description | Languages |
-|-----|------|-------------|-----------|
-| **F** | [Quality Assessment](./starter-kits/kit-f-quality-assessment/) | Evaluates data/service quality | TS |
-| **G** | [Requesting Agent](./starter-kits/kit-g-requesting-agent/) | Requests services from other agents | TS |
-| **H** | [Servicing Agent](./starter-kits/kit-h-servicing-agent/) | Provides services to other agents | TS |
-| **I** | [ROI Governor](./starter-kits/kit-i-roi-governor/) | Monitors and optimizes agent spending | TS |
+```bash
+cd agents/buyer-simple-agent
+poetry install
+poetry run python -m src.agent          # Interactive CLI (A2A mode)
+poetry run python -m src.web            # Web server + React frontend
+```
 
-### Track 3: Content Marketplace
+### Seller Agent (`agents/seller-simple-agent/`)
 
-| Kit | Name | Description | Languages |
-|-----|------|-------------|-----------|
-| **D** | [Publisher Agent](./starter-kits/kit-d-publisher-agent/) | Publishes content with tiered pricing | TS |
-| **E** | [Consuming Agent](./starter-kits/kit-e-consuming-agent/) | Discovers and consumes paid content | TS |
+Sells data and services with tiered pricing (1, 5, 10 credits). Supports both HTTP (x402 middleware) and A2A modes with auto-registration to buyer marketplaces.
 
-## Demo Agents
+```bash
+cd agents/seller-simple-agent
+poetry install
+poetry run python -m src.agent          # HTTP server (x402)
+poetry run python -m src.agent_a2a      # A2A server
+```
 
-Complete working agents in the [`agents/`](./agents/) directory:
+### MCP Server Agent (`agents/mcp-server-agent/`)
 
-| Agent | Description | Stack |
-|-------|-------------|-------|
-| [strands-simple-agent](./agents/strands-simple-agent/) | Strands AI agent with x402 payment-protected tools and full payment discovery flow | Python, Strands SDK, Nevermined |
-| [seller-simple-agent](./agents/seller-simple-agent/) | Data selling agent with tiered pricing, FastAPI server, A2A mode, and AgentCore deployment | Python, Strands SDK, Nevermined |
-| [buyer-simple-agent](./agents/buyer-simple-agent/) | Data buying agent with x402 payment, A2A discovery, budget management, and spending tracking | Python, Strands SDK, Nevermined |
-| [mcp-server-agent](./agents/mcp-server-agent/) | MCP server with payment-protected tools, dynamic credit pricing, and programmatic agent registration | Python, PaymentsMCP, Nevermined |
+MCP server with payment-protected tools (search, summarize, research). Includes a setup script that programmatically registers the agent and creates a payment plan.
 
-## Protocol Overview
+```bash
+cd agents/mcp-server-agent
+poetry install
+poetry run python -m src.setup          # Register agent + create plan
+poetry run python -m src.server         # Start MCP server (port 3000)
+```
+
+### Strands Agent (`agents/strands-simple-agent/`)
+
+Strands SDK agent with x402 payment-protected tools and full payment discovery flow. Demonstrates the `@requires_payment` decorator pattern.
+
+```bash
+cd agents/strands-simple-agent
+poetry install
+poetry run python agent.py              # Run agent
+poetry run python demo.py               # Run demo
+```
+
+## Protocols
 
 ### x402 (HTTP Payment Protocol)
 
-Used by Kits A, B, C, D, E. Payment negotiation via HTTP headers:
-
-```
-Client sends: payment-signature header with access token
-Server returns: 402 with payment-required header (if no token)
-Server returns: 200 with payment-response header (after settlement)
-```
+Payment negotiation via HTTP headers. The client sends a `payment-signature` header with an access token. If missing, the server returns `402 Payment Required` with a `payment-required` header describing what's needed.
 
 ### A2A (Agent-to-Agent)
 
-Used by Kits F, G, H, I. Direct agent-to-agent transactions.
+Standard agent discovery via `/.well-known/agent.json` and JSON-RPC messaging with payment extensions. Agents can auto-register with buyer marketplaces.
 
 ### MCP (Model Context Protocol)
 
-Used by Kit D. Tool/plugin monetization with logical URLs.
+Tool/plugin monetization with logical URLs (e.g., `mcp://server/tools/search`). Each tool can have independent credit pricing.
 
-## AWS Integration
+## Documentation
 
-This hackathon is hosted by AWS. See [aws-integration/](./aws-integration/) for:
-
-- **Strands SDK + Nevermined**: Add payments to Strands agents
-- **AgentCore Deployment**: Deploy agents to AWS AgentCore
+- [Getting Started](./docs/getting-started.md) — Environment setup and first agent
+- [AWS Integration](./docs/aws-integration.md) — Strands SDK + AgentCore deployment
+- [Deploy to AgentCore](./docs/deploy-to-agentcore.md) — Step-by-step AgentCore deployment with Nevermined payments
 
 ## Resources
 
-- [Getting Started Guide](./docs/getting-started.md)
-- [AWS Integration Guide](./docs/aws-integration.md)
-- [Track 1: Data Marketplace](./docs/tracks/track-1-data-marketplace.md)
-- [Track 2: Internal A2A Economy](./docs/tracks/track-2-internal-a2a.md)
-- [Track 3: Content Marketplace](./docs/tracks/track-3-content-marketplace.md)
-
-## External Links
-
 - [Nevermined Documentation](https://nevermined.ai/docs)
 - [Nevermined App](https://nevermined.app)
+- [Payments Python SDK](https://github.com/nevermined-io/payments-py)
+- [Payments TypeScript SDK](https://github.com/nevermined-io/payments)
 - [x402 Protocol Spec](https://github.com/coinbase/x402)
 - [AWS AgentCore Samples](https://github.com/awslabs/amazon-bedrock-agentcore-samples)
-
-## Support
-
-- **Nevermined Discord**: [Join Community](https://discord.com/invite/GZju2qScKq)
-- **Hackathon Slack**: Check event communications
+- [Discord Community](https://discord.com/invite/GZju2qScKq)
 
 ## License
 

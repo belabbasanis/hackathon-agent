@@ -243,6 +243,20 @@ Run the seller as an A2A-compliant agent with standard agent card discovery and 
 poetry run agent-a2a   # Starts A2A server on http://localhost:9000
 ```
 
+### CLI Flags
+
+| Flag | Description | Example |
+|------|-------------|---------|
+| `--tools` | Comma-separated tools to expose (`search`, `summarize`, `research`) | `--tools search` |
+| `--port` | Port to run on (default: 9000) | `--port 9001` |
+| `--buyer-url` | Buyer URL to auto-register with | `--buyer-url http://localhost:8000` |
+
+Example — run with only the search tool on port 9001, auto-registering with a buyer:
+
+```bash
+poetry run python -m src.agent_a2a --tools search --port 9001 --buyer-url http://localhost:8000
+```
+
 ### Agent Card
 
 The agent card is served at `/.well-known/agent.json` and includes a `urn:nevermined:payment` extension with plan ID, agent ID, and pricing info.
@@ -269,6 +283,17 @@ Add to your `.env`:
 ```bash
 A2A_PORT=9000  # Default: 9000
 ```
+
+## Multi-Agent Demo
+
+For a full walkthrough of running multiple sellers with a buyer agent (CLI and web UI), see the [Buyer Agent README](../buyer-simple-agent/README.md#multi-agent-demo-cli).
+
+The demo shows:
+- Starting a buyer with no sellers, then adding sellers incrementally
+- Running sellers with `--tools` and `--port` flags for different capabilities
+- Auto-registration via `--buyer-url`
+- Purchasing data from specific sellers
+- Credit balance and budget tracking
 
 ## Customization Ideas
 

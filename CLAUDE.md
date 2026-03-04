@@ -1,10 +1,10 @@
-# CLAUDE.md - Autonomous Business Hackathon
+# CLAUDE.md - Nevermined AI Agent Examples
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Overview
 
-Repository containing starter kits and resources for the **Autonomous Business Hackathon** (March 5-6, SF) hosted by AWS. The hackathon focuses on building AI agents with Nevermined payment integration.
+Repository containing working examples of AI agents with Nevermined payment integration. Each agent demonstrates a different protocol (x402, A2A, MCP) and deployment pattern.
 
 ## MCP Server Integration
 
@@ -43,40 +43,12 @@ Add to `~/.config/claude/claude_desktop_config.json`:
   https://nevermined.ai/docs/development-guide/build-using-nvm-mcp OR https://nevermined.ai/docs/llms-full.txt OR https://nevermined.ai/docs/llms.txt
 ---
 
-## Hackathon Tracks
-
-| Track | Theme | Focus |
-|-------|-------|-------|
-| **Track 1** | Data Marketplace | Autonomous data buying/selling agents (Kits A, B, C) |
-| **Track 2** | Internal A2A Economy | Agent-to-agent transactions within organizations (Kits F, G, H, I) |
-| **Track 3** | Content Marketplace | Content publishing and consumption agents (Kits D, E) |
-| **Track 4** | Open Track | Any creative use case |
-
----
-
-## Starter Kit Matrix
-
-| Kit | Name | Track | Protocol | Language |
-|-----|------|-------|----------|----------|
-| A | Buyer Agent | 1 | x402 | TypeScript, Python |
-| B | Selling Agent | 1 | x402 | TypeScript, Python |
-| C | Switching Agent | 1 | x402 | TypeScript |
-| D | Publisher Agent | 3 | MCP/x402 | TypeScript |
-| E | Consuming Agent | 3 | x402 | TypeScript |
-| F | Quality Assessment | 2 | A2A | TypeScript |
-| G | Requesting Agent | 2 | A2A | TypeScript |
-| H | Servicing Agent | 2 | A2A | TypeScript |
-| I | ROI Governor | 2 | A2A | TypeScript |
-
----
-
 ## Environment Setup
 
 ### Required Environment Variables
 
 ```bash
-# .env file
-# Nevermined credentials (required)
+# .env file (each agent has its own .env.example)
 NVM_API_KEY=sandbox:your-api-key
 NVM_ENVIRONMENT=sandbox          # or 'live', 'staging_sandbox'
 NVM_PLAN_ID=your-plan-id
@@ -157,7 +129,7 @@ app.add_middleware(
 
 ### A2A (Agent-to-Agent Protocol)
 
-For autonomous agent-to-agent transactions. See `tutorials/a2a-examples/` for patterns.
+For autonomous agent-to-agent transactions with standard agent card discovery (`/.well-known/agent.json`) and payment-protected JSON-RPC messaging.
 
 ### MCP (Model Context Protocol)
 
@@ -221,35 +193,19 @@ Reference: https://github.com/awslabs/amazon-bedrock-agentcore-samples
 
 ## Common Commands
 
-### TypeScript Kits
-
-```bash
-# Install dependencies
-yarn install
-
-# Run the agent (server)
-yarn agent
-
-# Run the client
-yarn client
-
-# Build
-yarn build
-```
-
-### Python Kits
+### Python Agents
 
 ```bash
 # Install dependencies
 poetry install
 
-# Run the agent (server)
-poetry run agent
-# NOTE: For agents with package-mode = false (buyer/seller-simple-agent),
-# use: poetry run python -m src.agent
-
-# Run the client
-poetry run client
+# Run entry points (all agents use package-mode = false)
+poetry run python -m src.agent       # HTTP server
+poetry run python -m src.agent_a2a   # A2A server
+poetry run python -m src.web         # Web server + frontend
+poetry run python -m src.client      # Test client
+poetry run python -m src.setup       # Setup script (mcp-server-agent)
+poetry run python -m src.server      # MCP server
 ```
 
 ---
@@ -261,36 +217,16 @@ hackathons/
 ├── CLAUDE.md                    # This file
 ├── README.md                    # Overview and getting started
 ├── .gitignore
-├── .env.example
 ├── docs/
-│   ├── getting-started.md
-│   ├── aws-integration.md
-│   └── tracks/
-│       ├── track-1-data-marketplace.md
-│       ├── track-2-internal-a2a.md
-│       ├── track-3-content-marketplace.md
-│       └── track-4-open.md
-├── starter-kits/
-│   ├── shared/                  # Common utilities
-│   ├── kit-a-buyer-agent/
-│   ├── kit-b-selling-agent/
-│   ├── kit-c-switching-agent/
-│   ├── kit-d-publisher-agent/
-│   ├── kit-e-consuming-agent/
-│   ├── kit-f-quality-assessment/
-│   ├── kit-g-requesting-agent/
-│   ├── kit-h-servicing-agent/
-│   └── kit-i-roi-governor/
-├── demo-scripts/                # Demo walkthroughs (CLI + frontend)
+│   ├── getting-started.md       # Environment setup guide
+│   ├── aws-integration.md      # Strands SDK + AgentCore deployment
+│   └── deploy-to-agentcore.md  # Step-by-step AgentCore guide
 ├── agents/                      # Independent agent projects
 │   ├── strands-simple-agent/    # Strands + Nevermined x402 demo
 │   ├── seller-simple-agent/     # Data selling agent with tiered pricing
 │   ├── buyer-simple-agent/      # Data buying agent with web frontend
 │   │   └── frontend/            # React + Vite chat UI
 │   └── mcp-server-agent/        # MCP server with payment-protected tools
-├── aws-integration/
-│   ├── strands-nevermined/      # Strands SDK + Nevermined
-│   └── agentcore-deployment/    # AgentCore deploy scripts
 └── examples/                    # Complete working demos
 ```
 
@@ -320,7 +256,6 @@ Each subfolder under `agents/` is an independent agent project with its own `pyp
   - Run client (A2A): `poetry run python -m src.client_a2a`
   - Docker build: `docker build -t buyer-agent .`
   - **Note:** Use `poetry run python -m src.<module>` (not `poetry run agent`) because `package-mode = false`
-  - Demo scripts: `demo-scripts/demo-cli.md`, `demo-scripts/demo-frontend.md`
 - `mcp-server-agent/` - MCP server with Nevermined payment-protected tools (search, summarize, research)
   - Install: `poetry install`
   - Setup (registers agent + plan, only needs NVM_API_KEY): `poetry run python -m src.setup`
@@ -345,4 +280,3 @@ Each subfolder under `agents/` is an independent agent project with its own `pyp
 ## Support
 
 - **Discord**: [Join Nevermined Community](https://discord.com/invite/GZju2qScKq)
-- **Hackathon Slack**: Check event communications
