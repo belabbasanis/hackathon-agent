@@ -26,7 +26,7 @@
 - [ ] `@nevermined-io/payments` installed (>= 1.1.5)
 - [ ] Valid `NVM_API_KEY` (sandbox builder key)
 - [ ] `NVM_AGENT_ID` and `NVM_PLAN_ID` set
-- [ ] A second `NVM_API_KEY` for subscriber/client testing
+- [ ] A second API key (`NVM_SUBSCRIBER_API_KEY`) for subscriber/client testing
 - [ ] Workshop files tested: `python server.py` starts, `python client.py` calls tools
 - [ ] Port 3000 free for the MCP server
 - [ ] (Optional) Claude Code or Cursor installed for the "connecting AI assistants" demo
@@ -72,7 +72,20 @@
 #### Step 1: Initialize
 
 ```python
+import urllib3
+from dotenv import load_dotenv
+from payments_py import Payments, PaymentOptions
 from payments_py.mcp import PaymentsMCP
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+load_dotenv()
+
+payments = Payments.get_instance(
+    PaymentOptions(
+        nvm_api_key=os.getenv("NVM_API_KEY", ""),
+        environment=os.getenv("NVM_ENVIRONMENT", "sandbox"),
+    )
+)
 
 mcp = PaymentsMCP(
     payments,
@@ -82,6 +95,8 @@ mcp = PaymentsMCP(
     description="Paid search and analysis tools",
 )
 ```
+
+> "Two boilerplate lines at the top: `load_dotenv()` loads your `.env` file, and `urllib3.disable_warnings()` silences SSL warnings in sandbox. Then `Payments.get_instance()` — note it's a class method, not a constructor — gives you the SDK instance."
 
 > "The server name is important — it becomes part of the logical URI: `mcp://my-mcp-server/tools/search`. Same registration works on localhost or production."
 
@@ -172,29 +187,48 @@ payments.mcp.registerTool(
 
 **Open `python/client.py`**
 
-> "The client gets an x402 token and sends it as a Bearer token in a JSON-RPC request."
+> "The client gets an x402 token and sends it as a Bearer token in a JSON-RPC request. Note: the client uses `NVM_SUBSCRIBER_API_KEY` — a subscriber key, not the builder key the server uses."
 
 ```python
+import urllib3
+from dotenv import load_dotenv
+from payments_py import Payments, PaymentOptions
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+load_dotenv()
+
+payments = Payments.get_instance(
+    PaymentOptions(
+        nvm_api_key=os.getenv("NVM_SUBSCRIBER_API_KEY", ""),
+        environment=os.getenv("NVM_ENVIRONMENT", "sandbox"),
+    )
+)
+
 token_result = payments.x402.get_x402_access_token(PLAN_ID)
 access_token = token_result["accessToken"]
 
-response = httpx.post(
-    f"{SERVER_URL}/mcp",
-    headers={"Authorization": f"Bearer {access_token}"},
-    json={
-        "jsonrpc": "2.0",
-        "method": "tools/call",
-        "params": {"name": "search", "arguments": {"query": "climate data"}},
-        "id": 1,
-    },
-)
+with httpx.Client(timeout=60.0) as client:
+    response = client.post(
+        f"{SERVER_URL}/mcp",
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+            "Authorization": f"Bearer {access_token}",
+        },
+        json={
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "params": {"name": "search", "arguments": {"query": "climate data"}},
+            "id": 1,
+        },
+    )
 
 result = response.json()
-print("Content:", result["result"]["content"])    # Tool output
-print("Payment:", result["result"]["_meta"])       # Settlement receipt
+print("Content:", result.get("result", {}).get("content"))    # Tool output
+print("Payment:", result.get("result", {}).get("_meta"))       # Settlement receipt
 ```
 
-> "The response includes your tool output plus a `_meta` field with payment metadata: transaction hash, credits redeemed, plan ID, subscriber address."
+> "A few things to call out: we use `httpx.Client(timeout=60.0)` — the default 5-second timeout is too short for payment verification. The `Accept` header includes both `application/json` and `text/event-stream` because MCP streamable HTTP may respond with either. And the response includes your tool output plus a `_meta` field with payment metadata."
 
 **Run it:**
 ```bash
@@ -240,8 +274,13 @@ python client.py
 | Issue | Fix |
 |-------|-----|
 | `PaymentsMCP` import fails | Check `payments-py` is up to date: `pip install -U payments-py` |
+| `Payments()` constructor error | Use `Payments.get_instance(PaymentOptions(...))` — not `Payments(...)` directly |
 | `mcp.start()` fails | Check port 3000 is free; check `NVM_AGENT_ID` is set |
-| Client gets 401/403 | Token must be sent as `Authorization: Bearer <token>`, not `payment-signature` |
+| Client gets 401/403 | Token must be sent as `Authorization: Bearer <token>`, not `payment-signature`. Also verify client uses `NVM_SUBSCRIBER_API_KEY` (subscriber key), not the builder `NVM_API_KEY` |
+| Client timeout / connection error | Use `httpx.Client(timeout=60.0)` — the default 5s timeout is too short for payment verification round-trips |
+| Client gets empty or unexpected response | Add `Accept: application/json, text/event-stream` header — MCP streamable HTTP requires it |
+| `.env` not loading | Add `from dotenv import load_dotenv` and call `load_dotenv()` at the top of every file |
+| SSL warnings flooding console | Add `urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)` at the top |
 | Dynamic pricing returns wrong amount | Check the context dict structure: `context.get("output")` vs `context.get("result")` — depends on version |
 | TypeScript `registerTool` type errors | Use `as any` for inputSchema if zod types don't match |
 | `_meta` field missing in response | Check server is using PaymentsMCP (not plain MCP) |

@@ -44,7 +44,7 @@
 |------|---------|--------|-------|
 | 0:00 - 0:05 | Why credits? The pricing abstraction | Slides | — |
 | 0:05 - 0:15 | Plan types: fixed, dynamic, time, PAYG, trial | Live code | `plan_types.py` / `plan-types.ts` |
-| 0:15 - 0:25 | Registering an agent + plan | Live code | `register_agent.py` / `register-agent.ts` |
+| 0:15 - 0:25 | Registering an agent + plan | Live code | `register_agent.py` / `register_agent_fiat.py` / `register-agent.ts` |
 | 0:25 - 0:35 | The subscriber experience | Live code | `subscriber.py` / `subscriber.ts` |
 | 0:35 - 0:50 | Dynamic pricing server | Live code | `dynamic_pricing.py` / `dynamic-pricing.ts` |
 | 0:50 - 1:00 | Q&A | Open | — |
@@ -86,10 +86,10 @@ Walk through each plan type:
 5. **Free Trial** — Fixed credits with price = 0
    > "Onboarding tool. Give 10 free credits to try your agent."
 
-**Then show price configurations:**
+**Then show price configurations (positional args only):**
 
-- **Crypto**: `get_crypto_price_config(10_000_000, receiver, token)` — $10 USDC (6 decimals)
-- **Fiat**: `get_fiat_price_config(1000, receiver)` — $10.00 in cents via Stripe
+- **Crypto**: `get_crypto_price_config(10_000_000, builder_address, USDC_ADDRESS)` — $10 USDC (6 decimals)
+- **Fiat**: `get_fiat_price_config(1000, builder_address)` — $10.00 in cents via Stripe
 
 > "Your middleware code is identical for both. The SDK auto-detects the scheme from plan metadata."
 
@@ -105,22 +105,49 @@ Walk through each plan type:
 
 > "One call to register both your agent and its payment plan."
 
+
 ```python
+from payments_py.plans import get_erc20_price_config, get_fixed_credits_config
+
+USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
+builder_address = payments.account_address
+
 result = payments.agents.register_agent_and_plan(
-    agent_metadata=AgentMetadata(name="My AI Agent", description="..."),
-    agent_api=AgentAPIAttributes(endpoints=[{"POST": "https://your-server.com/ask"}]),
-    plan_metadata=PlanMetadata(name="Pro Plan", description="100 credits for $10"),
-    price_config=price_config,
-    credits_config=credits_config,
+    agent_metadata={
+        "name": "My AI Agent",
+        "description": "AI analysis service",
+        "tags": ["ai", "analysis"],
+    },
+    agent_api={
+        "endpoints": [{"POST": "https://your-server.com/ask"}],
+        "agentDefinitionUrl": "https://your-server.com/openapi.json",
+    },
+    plan_metadata={
+        "name": "Pro Plan",
+        "description": "100 credits for 10 USDC",
+    },
+    price_config=get_erc20_price_config(10_000_000, USDC_ADDRESS, builder_address),
+    credits_config=get_fixed_credits_config(100, 1),
+    access_limit="credits",
 )
 print(f"Agent ID: {result['agentId']}")  # did:nv:...
 print(f"Plan ID:  {result['planId']}")   # did:nv:...
 ```
 
 **Key talking points:**
+- **`agentDefinitionUrl` is required** in `agent_api` — point it at your OpenAPI spec or agent card
+- **ERC20 pricing** — Default example uses USDC on Base Sepolia; the price helper is `get_erc20_price_config`
 - Save `agentId` and `planId` to your `.env` — you'll need them for everything
 - You can also do this no-code via nevermined.app (show it in browser)
 - One agent can have multiple plans (e.g., free trial + pro plan)
+
+**Fiat alternative: show `python/register_agent_fiat.py`**
+
+> "If you want to accept credit cards via Stripe instead of crypto, use `get_fiat_price_config`. The rest of the code is identical — just swap the price config."
+
+- Requires Stripe Connect setup in nevermined.app first (Settings > Payments > Connect Stripe)
+- Uses `get_fiat_price_config(999, builder_address)` — price in cents ($9.99)
+- Good to mention but don't code-along unless audience specifically needs fiat
 
 **Alternative: show nevermined.app UI**
 - Navigate to My Agents > New Agent
@@ -204,7 +231,9 @@ curl -X POST http://localhost:3000/generate \
 
 | Issue | Fix |
 |-------|-----|
-| `register_agent_and_plan` fails | Check API key has builder permissions; check account is verified |
+| `register_agent_and_plan` fails | Check API key has builder permissions; check account is verified; ensure dicts use camelCase keys |
+| Pydantic serialization errors | Don't use `AgentMetadata(...)` etc. — use plain dicts with camelCase keys instead |
+| Missing `agentDefinitionUrl` | This field is required in `agent_api` — add a URL to your OpenAPI spec or agent card |
 | `order_plan` fails | Subscriber needs sufficient balance (sandbox plans can be free) |
 | Dynamic pricing charges wrong amount | Lambda receives the raw request — check `req.body` structure |
 | "Plan not found" | Check `NVM_PLAN_ID` matches a real plan; check environment matches |

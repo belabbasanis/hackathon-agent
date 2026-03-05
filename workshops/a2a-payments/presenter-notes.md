@@ -25,7 +25,7 @@
 - [ ] `payments-py` installed with A2A support (`pip install payments-py`)
 - [ ] Two Nevermined accounts:
   - **Builder account**: `NVM_API_KEY` for the seller
-  - **Subscriber account**: separate `NVM_API_KEY` for the buyer
+  - **Subscriber account**: `NVM_SUBSCRIBER_API_KEY` for the buyer
 - [ ] `NVM_PLAN_ID` and `NVM_AGENT_ID` set (registered via app or SDK)
 - [ ] All workshop files tested: seller starts, buyer discovers and communicates
 - [ ] Port 8000 free for the seller agent
@@ -96,7 +96,19 @@ Buyer Agent                        Seller Agent
 
 **Open `python/seller.py`**
 
-Walk through the two parts:
+Walk through the setup and two main parts:
+
+#### Setup: Environment and Warnings
+
+```python
+from dotenv import load_dotenv
+import urllib3
+
+load_dotenv()
+urllib3.disable_warnings()
+```
+
+> "Both seller and buyer files start with `load_dotenv()` to load environment variables from `.env`, and `urllib3.disable_warnings()` to suppress SSL warnings in sandbox mode. You'll see this at the top of every file."
 
 #### Part 1: The Agent Card
 
@@ -149,6 +161,8 @@ my_agent.serve(port=PORT)
 
 Walk through the steps:
 
+> "The buyer also starts with `load_dotenv()` and `urllib3.disable_warnings()`. Note that the buyer uses `NVM_SUBSCRIBER_API_KEY` — a separate subscriber key, not the same `NVM_API_KEY` used by the seller. The seller is the builder; the buyer is the subscriber."
+
 1. **Discover**: `GET /.well-known/agent-card.json`
    ```python
    card = httpx.get(f"{SELLER_URL}/.well-known/agent-card.json").json()
@@ -182,13 +196,22 @@ Walk through the steps:
        )
    )
 
+   result_task = None
    async for event in client.send_message_stream(params):
        task, status_event = event  # tuple: (Task, TaskStatusUpdateEvent)
-       if task.status.state == "completed":
-           print(f"Credits used: {task.metadata.get('creditsUsed')}")
+       state = task.status.state if task.status else None
+       print(f"State: {state}")
+       if state == "completed":
+           result_task = task
+
+   # Extract results after stream is fully closed
+   if result_task:
+       print(f"Credits used: {result_task.metadata.get('creditsUsed')}")
    ```
 
 > "PaymentsClient handles x402 tokens internally — you don't call `get_x402_access_token` yourself. And `send_message_stream` takes a `MessageSendParams` object, not a plain string."
+
+> "Important: we consume the full stream before processing results. Breaking out of the `async for` loop early causes the SSE generator to close with an error. Instead, we save the completed task and handle it after the loop finishes."
 
 **Show TypeScript equivalent (`ts/buyer.ts`):**
 - Uses `payments.a2a.getClient(...)` to create the A2A client
@@ -235,8 +258,9 @@ python buyer.py
 |-------|-----|
 | Agent Card returns 404 | Check server is running; check URL includes correct path |
 | `extensions` key missing | Check `build_payment_agent_card` includes plan_id and agent_id |
-| Token verification fails | Buyer must use a subscriber key, not a builder key |
+| Token verification fails | Buyer must use `NVM_SUBSCRIBER_API_KEY` (subscriber key), not `NVM_API_KEY` (builder key) |
 | `send_message_stream` hangs | Check seller's executor emits a `final: True` event |
+| SSE generator close error | Do not `break` out of the `async for` loop — consume the full stream and process results after the loop |
 | Credits not settling | Check `creditsUsed` is in the final event's metadata (as string in Python) |
 | Port 8000 in use | Change `PORT` variable or kill existing process |
 
