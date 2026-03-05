@@ -1,0 +1,21 @@
+[
+  {
+    "type": "event",
+    "anonymous": false,
+    "name": "AgreementRegistered",
+    "inputs": [
+      { "name": "agreementId", "type": "bytes32", "indexed": true },
+      { "name": "creator", "type": "address", "indexed": true }
+    ]
+  },
+  {
+    "type": "event",
+    "anonymous": false,
+    "name": "ConditionUpdated",
+    "inputs": [
+      { "name": "agreementId", "type": "bytes32", "indexed": true },
+      { "name": "conditionId", "type": "bytes32", "indexed": true },
+      { "name": "state", "type": "uint8", "indexed": false }
+    ]
+  }
+]

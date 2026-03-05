@@ -1,0 +1,106 @@
+specVersion: 1.0.0
+indexerHints:
+  prune: auto
+schema:
+  file: ./schema.graphql
+dataSources:
+  # NFT1155Credits - credit mints, burns, transfers
+  - kind: ethereum
+    name: NFT1155Credits
+    network: base-sepolia
+    source:
+      address: "0xb2F9bB43F768E0D4ADCa49CE708acbE577bC2d64"
+      abi: NFT1155Credits
+      startBlock: 33681969
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - CreditTransfer
+        - DailyPlanStats
+        - ProtocolStats
+      abis:
+        - name: NFT1155Credits
+          file: ./abis/NFT1155Credits.json
+      eventHandlers:
+        - event: TransferSingle(indexed address,indexed address,indexed address,uint256,uint256)
+          handler: handleTransferSingle
+        - event: TransferBatch(indexed address,indexed address,indexed address,uint256[],uint256[])
+          handler: handleTransferBatch
+      file: ./src/credits.ts
+
+  # NFT1155ExpirableCreditsV2 - same events, different contract
+  - kind: ethereum
+    name: NFT1155ExpirableCreditsV2
+    network: base-sepolia
+    source:
+      address: "0xF7Fe16718a779010E48859fb1c7Eae9fd540872F"
+      abi: NFT1155Credits
+      startBlock: 33681969
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - CreditTransfer
+        - DailyPlanStats
+        - ProtocolStats
+      abis:
+        - name: NFT1155Credits
+          file: ./abis/NFT1155Credits.json
+      eventHandlers:
+        - event: TransferSingle(indexed address,indexed address,indexed address,uint256,uint256)
+          handler: handleTransferSingle
+        - event: TransferBatch(indexed address,indexed address,indexed address,uint256[],uint256[])
+          handler: handleTransferBatch
+      file: ./src/credits.ts
+
+  # AgreementsStore - agreement registration and condition fulfillment
+  - kind: ethereum
+    name: AgreementsStore
+    network: base-sepolia
+    source:
+      address: "0x1B8B04BbF240bfB15f12368352a1397E3882660C"
+      abi: AgreementsStore
+      startBlock: 33681969
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Agreement
+        - ConditionUpdate
+        - ProtocolStats
+      abis:
+        - name: AgreementsStore
+          file: ./abis/AgreementsStore.json
+      eventHandlers:
+        - event: AgreementRegistered(indexed bytes32,indexed address)
+          handler: handleAgreementRegistered
+        - event: ConditionUpdated(indexed bytes32,indexed bytes32,uint8)
+          handler: handleConditionUpdated
+      file: ./src/agreements.ts
+
+  # USDC on Base Sepolia - payments to PaymentsVault
+  - kind: ethereum
+    name: USDC
+    network: base-sepolia
+    source:
+      address: "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
+      abi: ERC20
+      startBlock: 33681969
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - USDCPayment
+        - ProtocolStats
+      abis:
+        - name: ERC20
+          file: ./abis/ERC20.json
+      eventHandlers:
+        - event: Transfer(indexed address,indexed address,uint256)
+          handler: handleUSDCTransfer
+      file: ./src/usdc.ts

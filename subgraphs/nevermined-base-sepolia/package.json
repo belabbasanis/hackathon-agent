@@ -1,0 +1,15 @@
+{
+  "name": "nevermined-base-sepolia-subgraph",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "codegen": "graph codegen",
+    "build": "graph build",
+    "deploy:goldsky": "goldsky subgraph deploy nevermined-base-sepolia/1.0.0 --path .",
+    "deploy:local": "graph create --node http://localhost:8020/ nevermined-base-sepolia && graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 nevermined-base-sepolia"
+  },
+  "dependencies": {
+    "@graphprotocol/graph-cli": "^0.93.2",
+    "@graphprotocol/graph-ts": "^0.35.1"
+  }
+}

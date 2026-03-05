@@ -1,0 +1,70 @@
+# Credit mints and burns via NFT1155Credits
+type CreditTransfer @entity {
+  id: Bytes!
+  type: String!             # "mint", "burn", or "transfer"
+  operator: Bytes!
+  from: Bytes!
+  to: Bytes!
+  planId: BigInt!
+  amount: BigInt!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+# Aggregated daily stats per plan
+type DailyPlanStats @entity {
+  id: String!               # "YYYY-MM-DD-{planId}"
+  date: String!
+  planId: BigInt!
+  mintCount: Int!
+  burnCount: Int!
+  transferCount: Int!
+  creditsMinted: BigInt!
+  creditsBurned: BigInt!
+  creditsTransferred: BigInt!
+}
+
+# USDC payments to PaymentsVault
+type USDCPayment @entity {
+  id: Bytes!
+  from: Bytes!
+  amount: BigDecimal!       # USDC amount (6 decimals converted)
+  rawAmount: BigInt!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+# Agreements registered (covers both crypto and fiat purchases)
+type Agreement @entity {
+  id: Bytes!                # agreementId
+  creator: Bytes!
+  conditions: [ConditionUpdate!]! @derivedFrom(field: "agreement")
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+# Condition state changes within agreements
+type ConditionUpdate @entity {
+  id: Bytes!
+  agreement: Agreement!
+  conditionId: Bytes!
+  state: Int!               # 0=Uninitialized, 1=Unfulfilled, 2=Fulfilled, 3=Aborted
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+# Global protocol stats
+type ProtocolStats @entity {
+  id: String!               # "global"
+  totalMints: Int!
+  totalBurns: Int!
+  totalCreditsMinted: BigInt!
+  totalCreditsBurned: BigInt!
+  totalUSDCVolume: BigDecimal!
+  totalAgreements: Int!
+  totalFulfilledConditions: Int!
+}
