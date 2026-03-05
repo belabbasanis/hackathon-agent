@@ -8,8 +8,13 @@ A2A seller with:
 """
 
 import os
+import urllib3
+from dotenv import load_dotenv
 from payments_py import Payments, PaymentOptions
 from payments_py.a2a import AgentResponse, a2a_requires_payment, build_payment_agent_card
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+load_dotenv()
 
 payments = Payments.get_instance(
     PaymentOptions(

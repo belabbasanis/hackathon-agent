@@ -10,16 +10,21 @@ Complete buyer flow:
 """
 
 import os
+import urllib3
 from uuid import uuid4
+from dotenv import load_dotenv
 
 import httpx
 from a2a.types import MessageSendParams, Message, TextPart
 from payments_py import Payments, PaymentOptions
 from payments_py.a2a import PaymentsClient
 
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+load_dotenv()
+
 payments = Payments.get_instance(
     PaymentOptions(
-        nvm_api_key=os.getenv("NVM_API_KEY", ""),  # subscriber key
+        nvm_api_key=os.getenv("NVM_SUBSCRIBER_API_KEY", ""),
         environment=os.getenv("NVM_ENVIRONMENT", "sandbox"),
     )
 )
@@ -68,6 +73,7 @@ async def main():
         )
     )
 
+    result_task = None
     async for event in client.send_message_stream(params):
         # Events arrive as (Task, TaskStatusUpdateEvent) tuples
         task, status_event = event
@@ -75,16 +81,17 @@ async def main():
         print(f"State: {state}")
 
         if state == "completed":
-            # Extract response text
-            if task.status.message and task.status.message.parts:
-                part = task.status.message.parts[0]
-                text = part.root.text if hasattr(part, "root") else str(part)
-                print(f"Response: {text}")
+            result_task = task
 
-            # Extract credits metadata
-            metadata = task.metadata or {}
-            print(f"Credits used: {metadata.get('creditsUsed')}")
-            break
+    # Extract results after stream is fully closed
+    if result_task:
+        if result_task.status.message and result_task.status.message.parts:
+            part = result_task.status.message.parts[0]
+            text = part.root.text if hasattr(part, "root") else str(part)
+            print(f"Response: {text}")
+
+        metadata = result_task.metadata or {}
+        print(f"Credits used: {metadata.get('creditsUsed')}")
 
 
 if __name__ == "__main__":
