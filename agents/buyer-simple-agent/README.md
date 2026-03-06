@@ -198,6 +198,13 @@ See [Deploy to AgentCore](../../docs/deploy-to-agentcore.md) for the full walkth
 | `MODEL_ID` | No | OpenAI model (default: `gpt-4o-mini`) |
 | `MAX_DAILY_SPEND` | No | Daily credit limit (0 = unlimited) |
 | `MAX_PER_REQUEST` | No | Per-request credit limit (0 = unlimited) |
+| `RATEGENIUS_URL` | No | RateGenius base URL (for **search_marketplace** tool) |
+| `RATEGENIUS_PLAN_ID` | No | RateGenius plan ID (default set; buy credits at nevermined.app) |
+| `RATEGENIUS_AGENT_ID` | No | RateGenius agent ID |
+
+### RateGenius (marketplace search)
+
+The **search_marketplace** tool calls [RateGenius](https://unsyllabified-wearifully-blaise.ngrok-free.dev) to find agents by plain-English description (e.g. "social media sentiment analysis", "blockchain analytics"). It costs **3 credits per search**. Buy credits on RateGenius's plan at [nevermined.app](https://nevermined.app) (search for plan `97866696...`). Optional env vars: `RATEGENIUS_URL`, `RATEGENIUS_PLAN_ID`, `RATEGENIUS_AGENT_ID` if the instance URL or IDs change.
 
 ### Subscribing to a Seller's Plan
 

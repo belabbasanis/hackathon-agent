@@ -15,13 +15,13 @@ RUN poetry config virtualenvs.create false \
 # Copy application code (env vars come from AgentCore runtime config)
 COPY src/ src/
 
-# AgentCore sets PORT; default to 8080
+# Listen on 8080 (Railway / AgentCore). In Railway "Generate Domain" use port 8080.
 ENV PORT=8080
 
-EXPOSE ${PORT}
+EXPOSE 8080
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:' + __import__('os').getenv('PORT', '8080') + '/.well-known/agent.json')" || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python -c "import urllib.request, os; p=os.getenv('PORT','8080'); u='http://127.0.0.1:'+p+'/.well-known/agent.json'; urllib.request.urlopen(u)" || exit 1
 
 # Run the AgentCore-aware A2A server
 CMD ["python", "-m", "src.agent_a2a_agentcore"]

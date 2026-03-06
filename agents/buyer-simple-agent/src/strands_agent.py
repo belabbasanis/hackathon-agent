@@ -25,6 +25,7 @@ from .tools.discover_a2a import discover_agent_impl
 from .tools.discover_economy import discover_economy_impl
 from .tools.purchase import purchase_data_impl
 from .tools.purchase_a2a import purchase_a2a_impl
+from .tools.purchase_rategenius import purchase_rategenius_impl
 
 load_dotenv()
 
@@ -234,8 +235,8 @@ def discover_agent(agent_url: str = "") -> dict:
 def discover_economy_sellers(category: str = "") -> dict:
     """Discover sellers from the hackathon economy (Nevermined Discovery API).
 
-    Fetches sellers that have pricing and plan IDs set. Registers them locally
-    so they appear in list_sellers and you can purchase from them with purchase_a2a.
+    Fetches all sellers from the economy. Those with plan IDs and a callable URL
+    are registered locally and appear in list_sellers for purchase_a2a.
 
     Args:
         category: Optional category filter (e.g. "Data Analytics", "AI/ML"). Leave empty for all.
@@ -252,6 +253,38 @@ def discover_economy_sellers(category: str = "") -> dict:
             if seller_registry.register_from_economy(s):
                 registered += 1
         log(_logger, "TOOLS", "DISCOVERY_ECONOMY", f"registered={registered}")
+    return result
+
+
+@tool
+def search_marketplace(query: str, budget_max: float | None = None, top_k: int = 5) -> dict:
+    """Search the AI marketplace for agents by description (RateGenius).
+
+    Use this when the user wants to find agents that offer a specific service,
+    e.g. \"social media sentiment analysis\", \"blockchain analytics\", \"grant writing\".
+    RateGenius returns ranked agents with pricing and relevance. Costs 3 credits per search.
+
+    Args:
+        query: Plain-English description of the service you need.
+        budget_max: Optional max price per request in USD (filters expensive agents).
+        top_k: Max number of results to return (default 5).
+    """
+    allowed, reason = budget.can_spend(3)
+    if not allowed:
+        return {
+            "status": "budget_exceeded",
+            "content": [{"text": f"Budget check failed: {reason}"}],
+            "credits_used": 0,
+        }
+    result = purchase_rategenius_impl(
+        payments=payments,
+        query=query,
+        budget_max=budget_max,
+        top_k=top_k,
+    )
+    credits_used = result.get("credits_used", 0)
+    if result.get("status") == "success" and credits_used > 0:
+        budget.record_purchase(credits_used, "RateGenius", query)
     return result
 
 
@@ -369,13 +402,15 @@ Sellers can come from (1) local registration when they start with --buyer-url, \
 
 Your workflow (do each step once, in order):
 1. **discover_economy_sellers** — Fetch sellers from the hackathon economy (optional category). \
-Only sellers with pricing and plan IDs are shown; they are then available in list_sellers.
+All economy sellers are returned; those with plan IDs and a callable URL are registered for list_sellers and purchase_a2a.
 2. **list_sellers** — See all registered sellers (local + economy) and their capabilities.
 3. **discover_agent** — (Optional) Manually discover a seller by URL if needed.
-4. **check_balance** — Check your credit balance and budget.
-5. **purchase_a2a** — Send an A2A message with automatic payment (FINAL STEP).
+4. **search_marketplace** — (Optional) When the user wants to find agents by description, use RateGenius: \
+e.g. \"find agents for social media sentiment\" or \"search marketplace for blockchain analytics\". Costs 3 credits per search.
+5. **check_balance** — Check your credit balance and budget.
+6. **purchase_a2a** — Send an A2A message with automatic payment (FINAL STEP).
 
-After step 5 completes, you are DONE. Report the results and stop.
+After purchase_a2a completes, you are DONE. Report the results and stop.
 """ + _GUIDELINES
 
 _AGENTCORE_PROMPT = """\
@@ -389,10 +424,11 @@ discovery is not available in this environment.
 Your workflow (do each step once, in order):
 1. **discover_economy_sellers** — Fetch sellers from the hackathon economy (optional category).
 2. **list_sellers** — See all registered sellers and their capabilities.
-3. **check_balance** — Check your credit balance and budget.
-4. **purchase_a2a** — Send an A2A message with automatic payment (FINAL STEP).
+3. **search_marketplace** — (Optional) Find agents by description (RateGenius, 3 credits per search).
+4. **check_balance** — Check your credit balance and budget.
+5. **purchase_a2a** — Send an A2A message with automatic payment (FINAL STEP).
 
-After step 4 completes, you are DONE. Report the results and stop.
+After purchase_a2a completes, you are DONE. Report the results and stop.
 
 Important guidelines:
 - Use list_sellers to see what sellers are available and their costs.
@@ -416,8 +452,8 @@ Your workflow (do each step once, in order):
 After step 3 completes, you are DONE. Report the results and stop.
 """ + _GUIDELINES
 
-_A2A_TOOLS = [discover_economy_sellers, list_sellers, discover_agent, check_balance, purchase_a2a]
-_AGENTCORE_TOOLS = [discover_economy_sellers, list_sellers, check_balance, purchase_a2a]
+_A2A_TOOLS = [discover_economy_sellers, list_sellers, discover_agent, check_balance, search_marketplace, purchase_a2a]
+_AGENTCORE_TOOLS = [discover_economy_sellers, list_sellers, check_balance, search_marketplace, purchase_a2a]
 _HTTP_TOOLS = [discover_pricing, check_balance, purchase_data]
 
 

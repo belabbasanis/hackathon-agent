@@ -22,7 +22,7 @@ import os
 import sys
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from starlette.types import ASGIApp, Receive, Scope, Send
 from strands.models.openai import OpenAIModel
 
@@ -36,14 +36,37 @@ from .strands_agent_plain import create_plain_agent, resolve_tools
 
 load_dotenv()
 
+# Fail fast with a clear message if required env vars are missing (e.g. on Railway)
+_missing = []
+if not os.environ.get("NVM_API_KEY"):
+    _missing.append("NVM_API_KEY")
+if not os.environ.get("NVM_PLAN_ID"):
+    _missing.append("NVM_PLAN_ID")
+if _missing:
+    print("ERROR: Missing required environment variables. Set them in Railway → Variables (or .env locally):")
+    for k in _missing:
+        print(f"  - {k}")
+    sys.exit(1)
+
 NVM_API_KEY = os.environ["NVM_API_KEY"]
 NVM_ENVIRONMENT = os.getenv("NVM_ENVIRONMENT", "sandbox")
 NVM_PLAN_ID = os.environ["NVM_PLAN_ID"]
-NVM_AGENT_ID = os.getenv("NVM_AGENT_ID", "")
+NVM_AGENT_ID = os.environ.get("NVM_AGENT_ID", "")
 
-# AgentCore-specific env vars
+# AgentCore / Railway: use PORT env (default 8080). Railway "Generate Domain" must target 8080.
 PORT = int(os.getenv("PORT", "8080"))
-AGENT_URL = os.getenv("AGENT_URL", f"http://localhost:{PORT}")
+
+
+def _resolve_agent_url() -> str:
+    """Public URL for the agent card. Prefer AGENT_URL; on Railway use RAILWAY_PUBLIC_DOMAIN if set."""
+    if u := os.getenv("AGENT_URL", "").strip():
+        return u
+    if d := os.getenv("RAILWAY_PUBLIC_DOMAIN", "").strip():
+        return f"https://{d}"
+    return f"http://localhost:{PORT}"
+
+
+AGENT_URL = _resolve_agent_url()
 
 _logger = get_logger("seller.agentcore")
 
@@ -58,6 +81,57 @@ if not NVM_AGENT_ID:
 payments = Payments.get_instance(
     PaymentOptions(nvm_api_key=NVM_API_KEY, environment=NVM_ENVIRONMENT)
 )
+
+
+# ---------------------------------------------------------------------------
+# Endpoint validation probe (Nevermined Protected URL validation)
+# ---------------------------------------------------------------------------
+
+# Nevermined's validator POSTs to the endpoint without a payment token and
+# expects 200. Return 200 for POST / with no payment-signature so validation
+# passes; real clients send payment-signature and get the normal A2A flow.
+_VALIDATION_RESPONSE = (
+    b'{"jsonrpc":"2.0","id":null,"result":{"status":"ok",'
+    b'"message":"Endpoint protected. Send payment-signature header for A2A requests."}}'
+)
+
+
+def _is_root_post(path: str) -> bool:
+    """True if path is the A2A root (/) or AgentCore invocation path (/invocations)."""
+    p = (path or "").strip()
+    return p == "" or p == "/" or p == "/invocations"
+
+
+class EndpointValidationMiddleware:
+    """ASGI middleware: for POST to root or /invocations with no payment-signature, return 200 so Nevermined endpoint validation passes."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        if scope.get("method") != "POST" or not _is_root_post(scope.get("path", "")):
+            await self.app(scope, receive, send)
+            return
+        headers = list(scope.get("headers", []))
+        if any(k == b"payment-signature" for k, _ in headers):
+            await self.app(scope, receive, send)
+            return
+        # No payment-signature: likely Nevermined validator probe — return 200 (drain request body)
+        while True:
+            msg = await receive()
+            if msg.get("type") == "http.disconnect":
+                break
+            if msg.get("type") == "http.request" and not msg.get("more_body", False):
+                break
+        await send({
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [[b"content-type", b"application/json"]],
+        })
+        await send({"type": "http.response.body", "body": _VALIDATION_RESPONSE})
 
 
 # ---------------------------------------------------------------------------
@@ -180,6 +254,20 @@ def main():
     async def ping():
         return {"status": "ok"}
 
+    @fastapi_app.post("/validate")
+    async def validate_endpoint():
+        """Return 200 for Nevermined Protected Endpoint URL validation. No payment required."""
+        return {"status": "ok", "message": "Endpoint reachable"}
+
+    # Serve agent card with URL from the request so it's correct behind proxies (Railway, etc.)
+    # even when AGENT_URL env is not set. Registered before PaymentsA2AServer so this route wins.
+    @fastapi_app.get("/.well-known/agent.json")
+    async def well_known_agent(request: Request):
+        base_url = str(request.base_url).rstrip("/")
+        card = agent_card.model_dump() if hasattr(agent_card, "model_dump") else dict(agent_card)
+        card["url"] = base_url
+        return card
+
     # Pass our app to PaymentsA2AServer so it adds A2A + payment routes to it
     result = PaymentsA2AServer.start(
         agent_card=agent_card,
@@ -196,7 +284,10 @@ def main():
     # AgentCore custom header to payment-signature before the payment
     # middleware checks for it.
     fastapi_app.add_middleware(AgentCoreHeaderMiddleware)
-    log(_logger, "SERVER", "STARTUP", "AgentCore header remapping middleware active")
+    # Run first (added last): return 200 for POST / with no payment-signature
+    # so Nevermined Protected Endpoint URL validation passes.
+    fastapi_app.add_middleware(EndpointValidationMiddleware)
+    log(_logger, "SERVER", "STARTUP", "AgentCore header remapping + endpoint validation middleware active")
 
     # Use uvicorn.run() directly so we can bind to 0.0.0.0 (required in containers)
     import uvicorn

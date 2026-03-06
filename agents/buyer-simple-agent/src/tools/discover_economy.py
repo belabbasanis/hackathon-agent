@@ -1,7 +1,7 @@
 """Discover sellers from the Nevermined hackathon Discovery API.
 
 Fetches GET https://nevermined.ai/hackathon/register/api/discover?side=sell
-with x-nvm-api-key. Returns only sellers that have pricing and planIds set.
+with x-nvm-api-key. Returns all sellers from the API (no filtering).
 """
 
 from urllib.parse import urlparse
@@ -24,13 +24,6 @@ def _base_url_from_endpoint(endpoint_url: str) -> str | None:
     return f"{parsed.scheme}://{parsed.netloc}"
 
 
-def _has_pricing_and_plans(seller: dict) -> bool:
-    """True if seller has at least pricing info and one planId."""
-    pricing = seller.get("pricing")
-    plan_ids = seller.get("planIds") or []
-    return bool(pricing is not None and plan_ids)
-
-
 def discover_economy_impl(
     nvm_api_key: str,
     side: str = "sell",
@@ -38,7 +31,7 @@ def discover_economy_impl(
 ) -> dict:
     """Fetch sellers (and optionally buyers) from the Discovery API.
 
-    Only includes sellers that have pricing and planIds set.
+    Returns all sellers from the API; no filtering by pricing or planIds.
 
     Args:
         nvm_api_key: Nevermined API key (full value, e.g. sandbox:...).
@@ -67,19 +60,17 @@ def discover_economy_impl(
             }
         data = resp.json()
         meta = data.get("meta", {})
-        raw_sellers = data.get("sellers", [])
-        sellers = [s for s in raw_sellers if _has_pricing_and_plans(s)]
-        log(_logger, "TOOLS", "DISCOVERY_ECONOMY",
-            f"total={meta.get('total', 0)} with_pricing_planIds={len(sellers)}")
+        sellers = data.get("sellers", [])
+        total = len(sellers)
+        log(_logger, "TOOLS", "DISCOVERY_ECONOMY", f"total={total}")
         if not sellers:
             return {
                 "status": "success",
-                "content": [{"text": "No economy sellers found with pricing and plan IDs set. "
-                            "Try without a category filter, or try again later."}],
+                "content": [{"text": "No economy sellers returned. Try without a category filter, or try again later."}],
                 "sellers": [],
                 "meta": meta,
             }
-        lines = [f"Economy sellers ({len(sellers)} with pricing and plans):"]
+        lines = [f"Economy sellers ({total}):"]
         for s in sellers:
             name = s.get("name", "Unknown")
             team = s.get("teamName", "")
@@ -98,6 +89,8 @@ def discover_economy_impl(
                 line += f" — {base}"
             else:
                 line += " — (no callable URL)"
+            if not plans:
+                line += " [no planId]"
             lines.append(line)
             if plans:
                 lines.append(f"    planId: {plans[0][:24]}..." if len(plans[0]) > 24 else f"    planId: {plans[0]}")

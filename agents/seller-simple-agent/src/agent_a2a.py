@@ -57,10 +57,22 @@ from .strands_agent_plain import ALL_TOOLS, create_plain_agent, resolve_tools
 
 load_dotenv()
 
+# Fail fast with a clear message if required env vars are missing (e.g. on Railway)
+_missing = []
+if not os.environ.get("NVM_API_KEY"):
+    _missing.append("NVM_API_KEY")
+if not os.environ.get("NVM_PLAN_ID"):
+    _missing.append("NVM_PLAN_ID")
+if _missing:
+    print("ERROR: Missing required environment variables. Set them in Railway → Variables (or .env locally):")
+    for k in _missing:
+        print(f"  - {k}")
+    sys.exit(1)
+
 NVM_API_KEY = os.environ["NVM_API_KEY"]
 NVM_ENVIRONMENT = os.getenv("NVM_ENVIRONMENT", "sandbox")
 NVM_PLAN_ID = os.environ["NVM_PLAN_ID"]
-NVM_AGENT_ID = os.getenv("NVM_AGENT_ID", "")
+NVM_AGENT_ID = os.environ.get("NVM_AGENT_ID", "")
 OBSERVABILITY_ENABLED = os.getenv("OBSERVABILITY_ENABLED", "false").lower() == "true"
 
 _logger = get_logger("seller")

@@ -284,6 +284,14 @@ Add to your `.env`:
 A2A_PORT=9000  # Default: 9000
 ```
 
+### Deploying to Railway
+
+Use the **Dockerfile** as-is. Do **not** set a custom start command in Railway:
+
+- The image CMD is `python -m src.agent_a2a_agentcore`, which reads `PORT` from the environment (default 8080) and binds to `0.0.0.0`.
+- If you override with e.g. `agent_a2a --port $PORT`, the `$PORT` variable may not be expanded and the app will crash with `invalid int value: '$PORT'`.
+- In Railway: **Settings** → **Deploy** (or **Build**) → leave **Start Command** empty so the Dockerfile CMD is used. Set **Variables**: `NVM_API_KEY`, `NVM_PLAN_ID`, `NVM_AGENT_ID`, `OPENAI_API_KEY`, and **`AGENT_URL`** = your public URL (e.g. `https://your-app.up.railway.app`) so the agent card advertises the correct URL to buyers. In **Networking**, generate a domain and set the target port to **8080**.
+
 ## Multi-Agent Demo
 
 For a full walkthrough of running multiple sellers with a buyer agent (CLI and web UI), see the [Buyer Agent README](../buyer-simple-agent/README.md#multi-agent-demo-cli).
