@@ -42,7 +42,7 @@ def discover_economy_impl(
         dict with status, content (for Strands), sellers list, and meta.
     """
     try:
-        params = {"side": side}
+        params = {"side": side, "limit": 100}
         if category:
             params["category"] = category
         with httpx.Client(timeout=15.0) as client:
@@ -60,7 +60,33 @@ def discover_economy_impl(
             }
         data = resp.json()
         meta = data.get("meta", {})
-        sellers = data.get("sellers", [])
+        sellers = list(data.get("sellers", []))
+        # Paginate if API returns hasMore/nextPage or total > len(sellers)
+        api_total = meta.get("total")
+        page = 1
+        max_pages = 20
+        while page < max_pages:
+            if api_total is not None and len(sellers) >= api_total:
+                break
+            if len(sellers) < 100:
+                break
+            page += 1
+            next_params = {**params, "page": page}
+            resp = httpx.get(
+                DISCOVERY_BASE,
+                headers={"x-nvm-api-key": nvm_api_key},
+                params=next_params,
+                timeout=15.0,
+            )
+            if resp.status_code != 200:
+                break
+            next_data = resp.json()
+            next_sellers = next_data.get("sellers", [])
+            if not next_sellers:
+                break
+            sellers.extend(next_sellers)
+            if not next_data.get("meta", {}).get("hasMore", True):
+                break
         total = len(sellers)
         log(_logger, "TOOLS", "DISCOVERY_ECONOMY", f"total={total}")
         if not sellers:
@@ -77,6 +103,8 @@ def discover_economy_impl(
             cat = s.get("category", "")
             pricing = (s.get("pricing") or {}).get("perRequest", "?")
             plans = s.get("planIds") or []
+            plan_pricing = s.get("planPricing") or []
+            plan_id = plans[0] if plans else (plan_pricing[0].get("planDid", "") if plan_pricing and isinstance(plan_pricing[0], dict) else "")
             endpoint = s.get("endpointUrl", "")
             base = _base_url_from_endpoint(endpoint)
             line = f"\n  • {name}"
@@ -89,11 +117,11 @@ def discover_economy_impl(
                 line += f" — {base}"
             else:
                 line += " — (no callable URL)"
-            if not plans:
+            if not plan_id:
                 line += " [no planId]"
             lines.append(line)
-            if plans:
-                lines.append(f"    planId: {plans[0][:24]}..." if len(plans[0]) > 24 else f"    planId: {plans[0]}")
+            if plan_id:
+                lines.append(f"    planId: {plan_id[:24]}..." if len(plan_id) > 24 else f"    planId: {plan_id}")
         return {
             "status": "success",
             "content": [{"text": "\n".join(lines)}],

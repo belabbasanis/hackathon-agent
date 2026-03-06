@@ -102,6 +102,14 @@ class SellerRegistry:
             The stored SellerInfo (always registered).
         """
         plan_ids = seller.get("planIds") or []
+        plan_pricing = seller.get("planPricing") or []
+        # Discovery API uses planPricing[].planDid when planIds is empty
+        if plan_ids:
+            plan_id = plan_ids[0]
+        elif plan_pricing and isinstance(plan_pricing[0], dict):
+            plan_id = plan_pricing[0].get("planDid", "")
+        else:
+            plan_id = ""
         endpoint_url = (seller.get("endpointUrl") or "").strip()
         callable_url = self._callable_url_from_endpoint(endpoint_url)
         # Unique key: use callable URL if present, else synthetic so we never drop a seller
@@ -110,7 +118,6 @@ class SellerRegistry:
         description = seller.get("description", "")
         services_sold = seller.get("servicesSold") or ""
         skills = [{"name": s.strip()} for s in services_sold.split(",") if s.strip()]
-        plan_id = plan_ids[0] if plan_ids else ""
         agent_id = seller.get("nvmAgentId", "")
         pricing = seller.get("pricing") or {}
         cost_description = pricing.get("perRequest") or str(pricing)
