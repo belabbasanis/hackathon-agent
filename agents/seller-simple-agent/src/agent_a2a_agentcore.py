@@ -104,35 +104,15 @@ def _is_root_post(path: str) -> bool:
 
 
 class EndpointValidationMiddleware:
-    """ASGI middleware: for POST to root or /invocations with no payment-signature, return 200 so Nevermined endpoint validation passes."""
+    """ASGI middleware: pass through to app. Nevermined shows green for Protected Endpoint when they get 402 (payment required), not 200."""
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http":
-            await self.app(scope, receive, send)
-            return
-        if scope.get("method") != "POST" or not _is_root_post(scope.get("path", "")):
-            await self.app(scope, receive, send)
-            return
-        headers = list(scope.get("headers", []))
-        if any(k == b"payment-signature" for k, _ in headers):
-            await self.app(scope, receive, send)
-            return
-        # No payment-signature: likely Nevermined validator probe — return 200 (drain request body)
-        while True:
-            msg = await receive()
-            if msg.get("type") == "http.disconnect":
-                break
-            if msg.get("type") == "http.request" and not msg.get("more_body", False):
-                break
-        await send({
-            "type": "http.response.start",
-            "status": 200,
-            "headers": [[b"content-type", b"application/json"]],
-        })
-        await send({"type": "http.response.body", "body": _VALIDATION_RESPONSE})
+        # No shortcut: let POST / and POST /invocations without token reach the payment layer,
+        # which returns 402. Nevermined validator expects 402 for "Protected Endpoint" to show green.
+        await self.app(scope, receive, send)
 
 
 # ---------------------------------------------------------------------------
@@ -255,6 +235,11 @@ def main():
     async def ping():
         return {"status": "ok"}
 
+    @fastapi_app.get("/")
+    async def root():
+        """Return 200 for GET / so Nevermined Protected Endpoint validation (GET) can show green."""
+        return {"status": "ok", "message": "Data Selling Agent A2A; use POST / with payment-signature for requests."}
+
     @fastapi_app.post("/validate")
     async def validate_endpoint():
         """Return 200 for Nevermined Protected Endpoint URL validation. No payment required."""
@@ -288,8 +273,7 @@ def main():
     # AgentCore custom header to payment-signature before the payment
     # middleware checks for it.
     fastapi_app.add_middleware(AgentCoreHeaderMiddleware)
-    # Run first (added last): return 200 for POST / with no payment-signature
-    # so Nevermined Protected Endpoint URL validation passes.
+    # Pass through so POST / without token returns 402 (Nevermined shows green for Protected Endpoint when they get 402).
     fastapi_app.add_middleware(EndpointValidationMiddleware)
     # CORS so browsers and Nevermined frontend can GET agent.json and OPTIONS preflight succeeds
     fastapi_app.add_middleware(
