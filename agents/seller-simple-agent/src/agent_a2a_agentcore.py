@@ -23,6 +23,7 @@ import sys
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.types import ASGIApp, Receive, Scope, Send
 from strands.models.openai import OpenAIModel
 
@@ -263,7 +264,10 @@ def main():
     # even when AGENT_URL env is not set. Registered before PaymentsA2AServer so this route wins.
     @fastapi_app.get("/.well-known/agent.json")
     async def well_known_agent(request: Request):
-        base_url = str(request.base_url).rstrip("/")
+        # Use X-Forwarded-Proto/Host so the card URL is https when behind Railway or other TLS proxies
+        proto = request.headers.get("x-forwarded-proto", "").strip().lower() or request.url.scheme
+        host = request.headers.get("x-forwarded-host", "").strip() or request.url.netloc
+        base_url = f"{proto}://{host}".rstrip("/")
         card = agent_card.model_dump() if hasattr(agent_card, "model_dump") else dict(agent_card)
         card["url"] = base_url
         return card
@@ -287,7 +291,15 @@ def main():
     # Run first (added last): return 200 for POST / with no payment-signature
     # so Nevermined Protected Endpoint URL validation passes.
     fastapi_app.add_middleware(EndpointValidationMiddleware)
-    log(_logger, "SERVER", "STARTUP", "AgentCore header remapping + endpoint validation middleware active")
+    # CORS so browsers and Nevermined frontend can GET agent.json and OPTIONS preflight succeeds
+    fastapi_app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    log(_logger, "SERVER", "STARTUP", "AgentCore header remapping + endpoint validation + CORS middleware active")
 
     # Use uvicorn.run() directly so we can bind to 0.0.0.0 (required in containers)
     import uvicorn
