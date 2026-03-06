@@ -107,6 +107,7 @@ def purchase_data_impl(
         }
 
     except httpx.ConnectError:
-        return _error(f"Cannot connect to seller at {seller_url}. Is it running?")
+        hint = " For the HTTP seller (poetry run python -m src.agent) use SELLER_URL=http://localhost:3000." if "9001" in seller_url else ""
+        return _error(f"Cannot connect to seller at {seller_url}. Is it running?{hint}")
     except Exception as e:
         return _error(f"Purchase failed: {e}")

@@ -22,12 +22,39 @@ from .registry import SellerRegistry
 from .tools.balance import check_balance_impl
 from .tools.discover import discover_pricing_impl
 from .tools.discover_a2a import discover_agent_impl
+from .tools.discover_economy import discover_economy_impl
 from .tools.purchase import purchase_data_impl
 from .tools.purchase_a2a import purchase_a2a_impl
 
 load_dotenv()
 
-NVM_API_KEY = os.environ["NVM_API_KEY"]
+
+def _check_nvm_api_key() -> str:
+    """Validate NVM_API_KEY and return it. Fail fast with a clear error if missing or placeholder."""
+    key = os.environ.get("NVM_API_KEY", "").strip()
+    if not key:
+        raise SystemExit(
+            "NVM_API_KEY is required. Set it in .env (see .env.example).\n"
+            "Get your key from https://nevermined.app → API Keys → Global NVM API Keys."
+        )
+    if "your-" in key.lower() or key == "sandbox:" or key == "live:":
+        raise SystemExit(
+            "NVM_API_KEY looks like a placeholder. Replace it with your real key from\n"
+            "https://nevermined.app → API Keys → Global NVM API Keys.\n"
+            "Use a subscriber key for the buyer; format is sandbox:<key> or live:<key>."
+        )
+    # payments_py expects prefix:JWT (the part after ":" must be a JWT)
+    if ":" in key:
+        suffix = key.split(":", 1)[1]
+        if suffix.count(".") < 2:
+            raise SystemExit(
+                "NVM_API_KEY is invalid: the part after 'sandbox:' or 'live:' must be a JWT.\n"
+                "Copy the full key from https://nevermined.app → API Keys → Global NVM API Keys."
+            )
+    return key
+
+
+NVM_API_KEY = _check_nvm_api_key()
 NVM_ENVIRONMENT = os.getenv("NVM_ENVIRONMENT", "sandbox")
 NVM_PLAN_ID = os.environ["NVM_PLAN_ID"]
 NVM_AGENT_ID = os.getenv("NVM_AGENT_ID")
@@ -192,7 +219,7 @@ def discover_agent(agent_url: str = "") -> dict:
         # Also register in the seller registry (best-effort)
         import httpx
         try:
-            card_url = f"{url.rstrip('/')}/.well-known/agent.json"
+            card_url = f"{url.rstrip('/')}/.well-known/agent-card.json"
             with httpx.Client(timeout=10.0) as client:
                 resp = client.get(card_url)
             if resp.status_code == 200:
@@ -200,6 +227,31 @@ def discover_agent(agent_url: str = "") -> dict:
         except Exception:
             pass
 
+    return result
+
+
+@tool
+def discover_economy_sellers(category: str = "") -> dict:
+    """Discover sellers from the hackathon economy (Nevermined Discovery API).
+
+    Fetches sellers that have pricing and plan IDs set. Registers them locally
+    so they appear in list_sellers and you can purchase from them with purchase_a2a.
+
+    Args:
+        category: Optional category filter (e.g. "Data Analytics", "AI/ML"). Leave empty for all.
+    """
+    result = discover_economy_impl(
+        NVM_API_KEY,
+        side="sell",
+        category=category.strip() or None,
+    )
+    sellers = result.get("sellers", [])
+    if result.get("status") == "success" and sellers:
+        registered = 0
+        for s in sellers:
+            if seller_registry.register_from_economy(s):
+                registered += 1
+        log(_logger, "TOOLS", "DISCOVERY_ECONOMY", f"registered={registered}")
     return result
 
 
@@ -312,32 +364,35 @@ _A2A_PROMPT = """\
 You are a data buying agent. You help users discover and purchase data from \
 sellers using the A2A (Agent-to-Agent) protocol with Nevermined payments.
 
-Sellers register with you automatically when they start. Use list_sellers \
-to see available sellers, their skills, and pricing.
+Sellers can come from (1) local registration when they start with --buyer-url, \
+(2) discover_economy_sellers from the hackathon Discovery API, or (3) discover_agent by URL.
 
 Your workflow (do each step once, in order):
-1. **list_sellers** — See all registered sellers and their capabilities.
-2. **discover_agent** — Manually discover a seller by URL (also registers it).
-3. **check_balance** — Check your credit balance and budget.
-4. **purchase_a2a** — Send an A2A message with automatic payment (FINAL STEP).
+1. **discover_economy_sellers** — Fetch sellers from the hackathon economy (optional category). \
+Only sellers with pricing and plan IDs are shown; they are then available in list_sellers.
+2. **list_sellers** — See all registered sellers (local + economy) and their capabilities.
+3. **discover_agent** — (Optional) Manually discover a seller by URL if needed.
+4. **check_balance** — Check your credit balance and budget.
+5. **purchase_a2a** — Send an A2A message with automatic payment (FINAL STEP).
 
-After step 4 completes, you are DONE. Report the results and stop.
+After step 5 completes, you are DONE. Report the results and stop.
 """ + _GUIDELINES
 
 _AGENTCORE_PROMPT = """\
 You are a data buying agent. You help users discover and purchase data from \
 sellers using the A2A (Agent-to-Agent) protocol with Nevermined payments.
 
-Sellers are pre-registered at startup. Use list_sellers to see available \
-sellers, their skills, and pricing. Do NOT try to discover sellers by URL — \
-agent card discovery is not available in this environment.
+Use discover_economy_sellers to fetch sellers from the hackathon economy, then \
+list_sellers to see them. Do NOT try to discover sellers by URL — agent card \
+discovery is not available in this environment.
 
 Your workflow (do each step once, in order):
-1. **list_sellers** — See all registered sellers and their capabilities.
-2. **check_balance** — Check your credit balance and budget.
-3. **purchase_a2a** — Send an A2A message with automatic payment (FINAL STEP).
+1. **discover_economy_sellers** — Fetch sellers from the hackathon economy (optional category).
+2. **list_sellers** — See all registered sellers and their capabilities.
+3. **check_balance** — Check your credit balance and budget.
+4. **purchase_a2a** — Send an A2A message with automatic payment (FINAL STEP).
 
-After step 3 completes, you are DONE. Report the results and stop.
+After step 4 completes, you are DONE. Report the results and stop.
 
 Important guidelines:
 - Use list_sellers to see what sellers are available and their costs.
@@ -361,8 +416,8 @@ Your workflow (do each step once, in order):
 After step 3 completes, you are DONE. Report the results and stop.
 """ + _GUIDELINES
 
-_A2A_TOOLS = [list_sellers, discover_agent, check_balance, purchase_a2a]
-_AGENTCORE_TOOLS = [list_sellers, check_balance, purchase_a2a]
+_A2A_TOOLS = [discover_economy_sellers, list_sellers, discover_agent, check_balance, purchase_a2a]
+_AGENTCORE_TOOLS = [discover_economy_sellers, list_sellers, check_balance, purchase_a2a]
 _HTTP_TOOLS = [discover_pricing, check_balance, purchase_data]
 
 

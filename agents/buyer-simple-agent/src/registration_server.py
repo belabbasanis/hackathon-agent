@@ -89,7 +89,7 @@ class RegistrationExecutor(AgentExecutor):
         log(_logger, "REGISTRY", "RECEIVED", f"agent_url={agent_url}")
 
         # Fetch the seller's agent card
-        card_url = f"{agent_url.rstrip('/')}/.well-known/agent.json"
+        card_url = f"{agent_url.rstrip('/')}/.well-known/agent-card.json"
         log(_logger, "REGISTRY", "FETCHING", f"card_url={card_url}")
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:

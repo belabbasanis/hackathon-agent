@@ -41,9 +41,12 @@ def discover_pricing_impl(seller_url: str) -> dict:
         }
 
     except httpx.ConnectError:
+        hint = ""
+        if "9001" in seller_url:
+            hint = " For the HTTP seller (poetry run python -m src.agent) use SELLER_URL=http://localhost:3000."
         return {
             "status": "error",
-            "content": [{"text": f"Cannot connect to seller at {seller_url}. Is it running?"}],
+            "content": [{"text": f"Cannot connect to seller at {seller_url}. Is it running?{hint}"}],
         }
     except Exception as e:
         return {

@@ -1,11 +1,12 @@
 """Thread-safe in-memory seller registry.
 
-Stores seller agent cards and payment info discovered via A2A registration
-or manual discovery. Used by the buyer agent to track available sellers.
+Stores seller agent cards and payment info discovered via A2A registration,
+manual discovery, or the Nevermined Discovery API (economy sellers).
 """
 
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from urllib.parse import urlparse
 
 
 @dataclass
@@ -75,6 +76,58 @@ class SellerRegistry:
         with self._lock:
             self._sellers[url] = info
 
+        return info
+
+    def _base_url_from_endpoint(self, endpoint_url: str) -> str | None:
+        """Derive base URL from Discovery endpointUrl. None if not a full URL."""
+        if not endpoint_url or not endpoint_url.strip().startswith(("http://", "https://")):
+            return None
+        parsed = urlparse(endpoint_url.strip())
+        if not parsed.netloc:
+            return None
+        return f"{parsed.scheme}://{parsed.netloc}"
+
+    def register_from_economy(self, seller: dict) -> "SellerInfo | None":
+        """Register a seller from the Discovery API response.
+
+        Only registers if seller has planIds and a callable endpointUrl.
+        They then appear in list_all and can be used for purchase_a2a.
+
+        Args:
+            seller: One entry from Discovery API sellers[] (name, planIds,
+                    nvmAgentId, endpointUrl, pricing, description, etc.).
+
+        Returns:
+            The stored SellerInfo, or None if missing planIds or base URL.
+        """
+        plan_ids = seller.get("planIds") or []
+        if not plan_ids:
+            return None
+        endpoint_url = seller.get("endpointUrl", "")
+        url = self._base_url_from_endpoint(endpoint_url)
+        if not url:
+            return None
+        url = url.rstrip("/")
+        name = seller.get("name", "Unknown")
+        description = seller.get("description", "")
+        services_sold = seller.get("servicesSold") or ""
+        skills = [{"name": s.strip()} for s in services_sold.split(",") if s.strip()]
+        plan_id = plan_ids[0]
+        agent_id = seller.get("nvmAgentId", "")
+        pricing = seller.get("pricing") or {}
+        cost_description = pricing.get("perRequest") or str(pricing)
+        info = SellerInfo(
+            url=url,
+            name=name,
+            description=description,
+            skills=skills,
+            plan_id=plan_id,
+            agent_id=agent_id,
+            credits=1,
+            cost_description=cost_description,
+        )
+        with self._lock:
+            self._sellers[url] = info
         return info
 
     def get_payment_info(self, agent_url: str) -> dict | None:

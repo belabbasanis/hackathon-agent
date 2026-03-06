@@ -5,8 +5,8 @@ WORKDIR /app
 # Install poetry
 RUN pip install --no-cache-dir poetry
 
-# Copy dependency files first for layer caching
-COPY pyproject.toml poetry.lock ./
+# Copy dependency files first for layer caching (poetry.lock is gitignored, so not in repo)
+COPY pyproject.toml ./
 
 # Install dependencies (no dev deps, no virtualenv inside container)
 RUN poetry config virtualenvs.create false \

@@ -18,7 +18,7 @@ def discover_agent_impl(agent_url: str) -> dict:
         dict with status, content (for Strands), and parsed agent card info.
     """
     url = agent_url.rstrip("/")
-    card_url = f"{url}/.well-known/agent.json"
+    card_url = f"{url.rstrip('/')}/.well-known/agent-card.json"
     log(_logger, "DISCOVERY", "FETCHING", f"url={card_url}")
 
     try:
