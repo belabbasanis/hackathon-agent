@@ -18,18 +18,22 @@ Usage:
 """
 
 import asyncio
+import base64
 import os
 import sys
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from starlette.types import ASGIApp, Receive, Scope, Send
 from strands.models.openai import OpenAIModel
 
 from payments_py import Payments, PaymentOptions
 from payments_py.a2a.agent_card import build_payment_agent_card
 from payments_py.a2a.server import PaymentsA2AServer
+from payments_py.x402.helpers import build_payment_required
 
 from .agent_a2a import StrandsA2AExecutor
 from .log import get_logger, log
@@ -256,6 +260,60 @@ def main():
         card = agent_card.model_dump() if hasattr(agent_card, "model_dump") else dict(agent_card)
         card["url"] = base_url
         return card
+
+    # Nevermined query-agents style: POST /prompt with {"query": "..."} and payment-signature header
+    # https://nevermined.ai/docs/development-guide/query-agents
+    max_credits = max(credit_map.values()) if credit_map else 10
+
+    class PromptBody(BaseModel):
+        query: str
+        parameters: dict | None = None
+
+    @fastapi_app.post("/prompt")
+    async def prompt(request: Request, body: PromptBody):
+        """Simple query endpoint per Nevermined docs: verify → execute → settle."""
+        payment_required = build_payment_required(
+            plan_id=NVM_PLAN_ID,
+            endpoint=str(request.url),
+            agent_id=NVM_AGENT_ID,
+            http_verb="POST",
+        )
+        token = request.headers.get("payment-signature")
+        if not token:
+            encoded = base64.b64encode(
+                payment_required.model_dump_json(by_alias=True).encode()
+            ).decode()
+            return JSONResponse(
+                status_code=402,
+                content={"error": "Payment Required", "message": "Send x402 token in payment-signature header"},
+                headers={"payment-required": encoded},
+            )
+        try:
+            verification = payments.facilitator.verify_permissions(
+                payment_required=payment_required,
+                x402_access_token=token,
+                max_amount=str(max_credits),
+            )
+        except Exception as e:
+            log(_logger, "PAYMENT", "PROMPT_VERIFY_FAIL", str(e))
+            return JSONResponse(status_code=402, content={"error": f"Token verification failed: {e}"})
+        if not verification.is_valid:
+            return JSONResponse(
+                status_code=402,
+                content={"error": getattr(verification, "invalid_reason", "Invalid token")},
+            )
+        try:
+            result = await asyncio.to_thread(agent, body.query)
+            response_text = str(result)
+        except Exception as e:
+            log(_logger, "PAYMENT", "PROMPT_EXEC_FAIL", str(e))
+            return JSONResponse(status_code=500, content={"error": str(e)})
+        payments.facilitator.settle_permissions(
+            payment_required=payment_required,
+            x402_access_token=token,
+            max_amount=str(max_credits),
+        )
+        return {"response": response_text}
 
     # Pass our app to PaymentsA2AServer so it adds A2A + payment routes to it
     result = PaymentsA2AServer.start(

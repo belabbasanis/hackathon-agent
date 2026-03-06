@@ -78,41 +78,39 @@ class SellerRegistry:
 
         return info
 
-    def _base_url_from_endpoint(self, endpoint_url: str) -> str | None:
-        """Derive base URL from Discovery endpointUrl. None if not a full URL."""
+    def _callable_url_from_endpoint(self, endpoint_url: str) -> str | None:
+        """Return callable URL from Discovery endpointUrl, preserving path."""
         if not endpoint_url or not endpoint_url.strip().startswith(("http://", "https://")):
             return None
         parsed = urlparse(endpoint_url.strip())
         if not parsed.netloc:
             return None
-        return f"{parsed.scheme}://{parsed.netloc}"
+        return endpoint_url.strip().rstrip("/")
 
-    def register_from_economy(self, seller: dict) -> "SellerInfo | None":
+    def register_from_economy(self, seller: dict) -> SellerInfo:
         """Register a seller from the Discovery API response.
 
-        Only registers if seller has planIds and a callable endpointUrl.
-        They then appear in list_all and can be used for purchase_a2a.
+        Registers every seller with no gating. Callable endpointUrl values are
+        preserved exactly (including path) so purchase_a2a can hit the right route.
+        Sellers missing a callable URL still appear in list_all.
 
         Args:
             seller: One entry from Discovery API sellers[] (name, planIds,
                     nvmAgentId, endpointUrl, pricing, description, etc.).
 
         Returns:
-            The stored SellerInfo, or None if missing planIds or base URL.
+            The stored SellerInfo (always registered).
         """
         plan_ids = seller.get("planIds") or []
-        if not plan_ids:
-            return None
-        endpoint_url = seller.get("endpointUrl", "")
-        url = self._base_url_from_endpoint(endpoint_url)
-        if not url:
-            return None
-        url = url.rstrip("/")
+        endpoint_url = (seller.get("endpointUrl") or "").strip()
+        callable_url = self._callable_url_from_endpoint(endpoint_url)
+        # Unique key: use callable URL if present, else synthetic so we never drop a seller
+        url = (callable_url if callable_url else f"economy:{seller.get('name', 'Unknown')}:{id(seller)}")
         name = seller.get("name", "Unknown")
         description = seller.get("description", "")
         services_sold = seller.get("servicesSold") or ""
         skills = [{"name": s.strip()} for s in services_sold.split(",") if s.strip()]
-        plan_id = plan_ids[0]
+        plan_id = plan_ids[0] if plan_ids else ""
         agent_id = seller.get("nvmAgentId", "")
         pricing = seller.get("pricing") or {}
         cost_description = pricing.get("perRequest") or str(pricing)
@@ -164,17 +162,23 @@ class SellerRegistry:
                 "name": s.name,
                 "description": s.description,
                 "skills": skill_names,
+                "plan_id": s.plan_id,
+                "agent_id": s.agent_id,
+                "purchase_ready": bool(
+                    s.url.startswith(("http://", "https://")) and s.plan_id
+                ),
                 "credits": s.credits,
                 "cost_description": s.cost_description,
             })
         return result
 
     def get_first_url(self) -> str | None:
-        """Return the URL of the first registered seller, or None."""
+        """Return the URL of the first registered seller with a callable http(s) URL, or None."""
         with self._lock:
-            if not self._sellers:
-                return None
-            return next(iter(self._sellers.values())).url
+            for info in self._sellers.values():
+                if info.url.startswith(("http://", "https://")):
+                    return info.url
+            return None
 
     def __len__(self) -> int:
         with self._lock:

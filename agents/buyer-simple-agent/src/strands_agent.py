@@ -235,8 +235,8 @@ def discover_agent(agent_url: str = "") -> dict:
 def discover_economy_sellers(category: str = "") -> dict:
     """Discover sellers from the hackathon economy (Nevermined Discovery API).
 
-    Fetches all sellers from the economy. Those with plan IDs and a callable URL
-    are registered locally and appear in list_sellers for purchase_a2a.
+    Fetches all sellers from the economy and registers every one (no gating).
+    All appear in list_sellers; those with plan ID and URL can be used for purchase_a2a.
 
     Args:
         category: Optional category filter (e.g. "Data Analytics", "AI/ML"). Leave empty for all.
@@ -248,11 +248,9 @@ def discover_economy_sellers(category: str = "") -> dict:
     )
     sellers = result.get("sellers", [])
     if result.get("status") == "success" and sellers:
-        registered = 0
         for s in sellers:
-            if seller_registry.register_from_economy(s):
-                registered += 1
-        log(_logger, "TOOLS", "DISCOVERY_ECONOMY", f"registered={registered}")
+            seller_registry.register_from_economy(s)
+        log(_logger, "TOOLS", "DISCOVERY_ECONOMY", f"registered={len(sellers)}")
     return result
 
 
@@ -323,10 +321,27 @@ def purchase_a2a(query: str, agent_url: str = "") -> dict:
     # Check registry for cached payment info (skip discovery round-trip)
     cached = seller_registry.get_payment_info(url)
     if cached:
+        cached_plan = cached.get("planId", "")
+        cached_agent = cached.get("agentId", "")
         log(_logger, "TOOLS", "PURCHASE",
-            f'using cached payment info plan={cached["planId"][:12]}')
-        plan_id = cached["planId"] or NVM_PLAN_ID
-        agent_id = cached["agentId"] or NVM_AGENT_ID or ""
+            f'using cached payment info plan={cached_plan[:12] if cached_plan else "(none)"}')
+        # Do not silently fall back to local env plan for third-party sellers.
+        # That creates invalid tokens and confusing downstream errors.
+        if cached_plan:
+            plan_id = cached_plan
+            agent_id = cached_agent or ""
+        elif url.rstrip("/") == SELLER_A2A_URL.rstrip("/") and NVM_PLAN_ID:
+            plan_id = NVM_PLAN_ID
+            agent_id = NVM_AGENT_ID or ""
+        else:
+            return {
+                "status": "error",
+                "content": [{"text": (
+                    "Selected seller has no plan ID in discovery metadata. "
+                    "Cannot generate x402 token for this seller."
+                )}],
+                "credits_used": 0,
+            }
         min_credits = cached["credits"]
     else:
         # Fall back to full discovery
@@ -338,8 +353,8 @@ def purchase_a2a(query: str, agent_url: str = "") -> dict:
                 "credits_used": 0,
             }
         payment = discovery.get("payment", {})
-        plan_id = payment.get("planId", NVM_PLAN_ID)
-        agent_id = payment.get("agentId", NVM_AGENT_ID or "")
+        plan_id = payment.get("planId", "")
+        agent_id = payment.get("agentId", "")
         min_credits = payment.get("credits", 1)
 
     if not plan_id:
@@ -402,7 +417,7 @@ Sellers can come from (1) local registration when they start with --buyer-url, \
 
 Your workflow (do each step once, in order):
 1. **discover_economy_sellers** — Fetch sellers from the hackathon economy (optional category). \
-All economy sellers are returned; those with plan IDs and a callable URL are registered for list_sellers and purchase_a2a.
+All economy sellers are returned and registered for list_sellers; those with plan IDs and a callable URL can be used for purchase_a2a.
 2. **list_sellers** — See all registered sellers (local + economy) and their capabilities.
 3. **discover_agent** — (Optional) Manually discover a seller by URL if needed.
 4. **search_marketplace** — (Optional) When the user wants to find agents by description, use RateGenius: \
